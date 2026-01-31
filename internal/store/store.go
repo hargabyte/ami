@@ -13,6 +13,13 @@ import (
 	"github.com/hargabyte/ami/internal/models"
 )
 
+// CatchupOptions specifies filters for memory catchup
+type CatchupOptions struct {
+	Limit    int
+	Category string
+	Since    string
+}
+
 // RecallOptions specifies filters for memory recall
 type RecallOptions struct {
 	Query      string
@@ -109,6 +116,42 @@ func AddMemory(content string, category models.Category, priority float64, tags 
 	}, nil
 }
 
+// CatchupMemories returns the most recent memories
+func CatchupMemories(opts CatchupOptions) ([]models.Memory, error) {
+	whereClauses := []string{}
+
+	if opts.Category != "" {
+		cat := models.Category(opts.Category)
+		if cat.IsValid() {
+			whereClauses = append(whereClauses, fmt.Sprintf("category = '%s'", string(cat)))
+		}
+	}
+
+	if opts.Since != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at >= '%s'", opts.Since))
+	}
+
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags
+		FROM memories
+		%s
+		ORDER BY created_at DESC
+		LIMIT %d
+	`, whereClause, opts.Limit)
+
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseMemoriesJSON(output)
+}
+
 // RecallMemories performs a basic text search on memories with optional filters
 func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 	// Build WHERE clause
@@ -185,6 +228,129 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 	return memories, nil
 }
 
+// MemoryHistory represents a version of a memory in history
+type MemoryHistory struct {
+	models.Memory
+	CommitHash string    `json:"commit_hash"`
+	Committer  string    `json:"committer"`
+	CommitDate time.Time `json:"commit_date"`
+}
+
+// GetMemoryHistory returns the version history of a memory
+func GetMemoryHistory(id string) ([]MemoryHistory, error) {
+	query := fmt.Sprintf(`
+		SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags, commit_hash, committer, commit_date
+		FROM dolt_history_memories
+		WHERE id = '%s'
+		ORDER BY commit_date DESC
+	`, id)
+
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Rows []map[string]interface{} `json:"rows"`
+	}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		return nil, err
+	}
+
+	var history []MemoryHistory
+	for _, row := range result.Rows {
+		var h MemoryHistory
+		h.ID = asString(row["id"])
+		h.Content = asString(row["content"])
+		h.Category = models.Category(asString(row["category"]))
+		h.Priority = asFloat64(row["priority"])
+		h.CreatedAt = asTime(row["created_at"])
+		h.AccessedAt = asTime(row["accessed_at"])
+		h.AccessCount = asInt(row["access_count"])
+		h.Source = asString(row["source"])
+		h.CommitHash = asString(row["commit_hash"])
+		h.Committer = asString(row["committer"])
+		h.CommitDate = asTime(row["commit_date"])
+
+		tagsJSON := asString(row["tags"])
+		var tags models.Tags
+		if tagsJSON != "" && tagsJSON != "[]" {
+			json.Unmarshal([]byte(tagsJSON), &tags)
+		}
+		h.Tags = tags
+
+		history = append(history, h)
+	}
+
+	return history, nil
+}
+
+// LinkMemories creates a link between two memories
+func LinkMemories(fromID, toID, relation string) error {
+	query := fmt.Sprintf(`
+		INSERT INTO memory_links (from_id, to_id, relation)
+		VALUES ('%s', '%s', '%s')
+		ON DUPLICATE KEY UPDATE relation = VALUES(relation)
+	`, fromID, toID, relation)
+
+	if _, err := db.ExecDoltSQL(query); err != nil {
+		return err
+	}
+
+	commitMsg := fmt.Sprintf("Link memory %s to %s (%s)", fromID, toID, relation)
+	return DoltCommit(commitMsg)
+}
+
+// GetMemoryLinks returns all links for a specific memory
+func GetMemoryLinks(id string) ([]map[string]string, error) {
+	query := fmt.Sprintf(`
+		SELECT from_id, to_id, relation
+		FROM memory_links
+		WHERE from_id = '%s' OR to_id = '%s'
+	`, id, id)
+
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Rows []map[string]interface{} `json:"rows"`
+	}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		return nil, err
+	}
+
+	var links []map[string]string
+	for _, row := range result.Rows {
+		links = append(links, map[string]string{
+			"from_id":  asString(row["from_id"]),
+			"to_id":    asString(row["to_id"]),
+			"relation": asString(row["relation"]),
+		})
+	}
+
+	return links, nil
+}
+
+// GetKeystoneMemories returns high-priority and high-access memories
+func GetKeystoneMemories(limit int) ([]models.Memory, error) {
+	// Formula: (Priority * 2) + (AccessCount / 10)
+	query := fmt.Sprintf(`
+		SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags
+		FROM memories
+		ORDER BY (priority * 2) + (access_count / 10.0) DESC
+		LIMIT %d
+	`, limit)
+
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseMemoriesJSON(output)
+}
+
 // UpdateMemory updates an existing memory
 func UpdateMemory(params UpdateParams) error {
 	// Build SET clause
@@ -242,6 +408,55 @@ func UpdateMemory(params UpdateParams) error {
 	}
 
 	return nil
+}
+
+// RollbackMemory rolls back a memory to a specific commit
+func RollbackMemory(id string, commitHash string) error {
+	// 1. Get the content/metadata from history for that commit
+	query := fmt.Sprintf(`
+		SELECT content, category, priority, source, tags
+		FROM dolt_history_memories
+		WHERE id = '%s' AND commit_hash = '%s'
+		LIMIT 1
+	`, id, commitHash)
+
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return err
+	}
+
+	var result struct {
+		Rows []map[string]interface{} `json:"rows"`
+	}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		return err
+	}
+
+	if len(result.Rows) == 0 {
+		return fmt.Errorf("no history found for id %s and commit %s", id, commitHash)
+	}
+
+	row := result.Rows[0]
+	content := asString(row["content"])
+	category := asString(row["category"])
+	priority := asFloat64(row["priority"])
+	source := asString(row["source"])
+	tagsJSON := asString(row["tags"])
+
+	// 2. Update the current memories table
+	updateQuery := fmt.Sprintf(`
+		UPDATE memories
+		SET content = '%s', category = '%s', priority = %f, source = '%s', tags = '%s', accessed_at = NOW()
+		WHERE id = '%s'
+	`, strings.ReplaceAll(content, "'", "''"), category, priority, strings.ReplaceAll(source, "'", "''"), tagsJSON, id)
+
+	if _, err := db.ExecDoltSQL(updateQuery); err != nil {
+		return err
+	}
+
+	// 3. Commit the rollback
+	commitMsg := fmt.Sprintf("Rollback memory %s to commit %s", id, commitHash)
+	return DoltCommit(commitMsg)
 }
 
 // DeleteMemory deletes a memory by ID

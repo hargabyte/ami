@@ -86,6 +86,11 @@ ami tags
 | `ami update [id]` | Modify existing memory | ✅ |
 | `ami delete [id]` | Remove a memory by ID | ✅ |
 | `ami tags` | List all unique tags | ✅ |
+| `ami catchup` | Show recent memories | ✅ |
+| `ami history [id]` | Show memory version history | ✅ |
+| `ami rollback [id] [commit]` | Revert memory to version | ✅ |
+| `ami link [from] [to]` | Link two memories | ✅ |
+| `ami keystones` | Identify core facts | ✅ |
 | `ami robot status` | System status (JSON) | ✅ |
 
 ### Flags
@@ -155,12 +160,12 @@ dolt checkout <commit-hash>
 
 ## 🚦 Roadmap
 
-### v0.2.1 (Current Sprint)
-- [ ] `ami catchup` - Session recovery
-- [ ] `ami history <id>` - Version history per memory
-- [ ] `ami rollback <id>` - Revert memory state
-- [ ] `ami link <from> <to>` - Build knowledge graphs
-- [ ] `ami keystones` - Identify core facts
+### v0.2.1 (Current Release)
+- [x] `ami catchup` - Session recovery
+- [x] `ami history <id>` - Version history per memory
+- [x] `ami rollback <id> <commit>` - Revert memory state
+- [x] `ami link <from> <to>` - Build knowledge graphs
+- [x] `ami keystones` - Identify core facts
 
 ### v0.3.0 (Future)
 - [ ] Embedding-based semantic search

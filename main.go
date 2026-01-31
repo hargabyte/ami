@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.2.0"
+var version = "0.2.1"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -31,6 +31,11 @@ Features:
 	rootCmd.AddCommand(addCmd())
 	rootCmd.AddCommand(updateCmd())
 	rootCmd.AddCommand(recallCmd())
+	rootCmd.AddCommand(catchupCmd())
+	rootCmd.AddCommand(historyCmd())
+	rootCmd.AddCommand(rollbackCmd())
+	rootCmd.AddCommand(linkCmd())
+	rootCmd.AddCommand(keystonesCmd())
 	rootCmd.AddCommand(deleteCmd())
 	rootCmd.AddCommand(tagsCmd())
 	rootCmd.AddCommand(checkpointCmd())
@@ -364,6 +369,338 @@ func recallCmd() *cobra.Command {
 	cmd.Flags().StringSliceVar(&tagsFilter, "tags", []string{}, "Filter by tags (all tags must match)")
 	cmd.Flags().StringVar(&categoryFilter, "category", "", "Filter by category (core|semantic|working|episodic)")
 	cmd.Flags().BoolVar(&withDecay, "decay", false, "Use decay-weighted scoring for recall")
+	return cmd
+}
+
+func catchupCmd() *cobra.Command {
+	var robotMode bool
+	var limit int
+	var category string
+	var since string
+
+	cmd := &cobra.Command{
+		Use:   "catchup",
+		Short: "Catch up on recent memories",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			opts := store.CatchupOptions{
+				Limit:    limit,
+				Category: category,
+				Since:    since,
+			}
+
+			memories, err := store.CatchupMemories(opts)
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error catching up: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				result := map[string]interface{}{
+					"status":   "ok",
+					"count":    len(memories),
+					"memories": memories,
+				}
+				jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Printf("Recent memories (%d):\n\n", len(memories))
+				for i, m := range memories {
+					fmt.Printf("%d. [%s] %s (%s)\n", i+1, m.Category, m.ID, m.CreatedAt.Format("2006-01-02 15:04"))
+					fmt.Printf("   %s\n\n", m.Content)
+				}
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of results")
+	cmd.Flags().StringVar(&category, "category", "", "Filter by category")
+	cmd.Flags().StringVar(&since, "since", "", "Filter by creation time (YYYY-MM-DD HH:MM:SS)")
+	return cmd
+}
+
+func historyCmd() *cobra.Command {
+	var robotMode bool
+
+	cmd := &cobra.Command{
+		Use:   "history [id]",
+		Short: "Show version history for a memory",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			id := args[0]
+			history, err := store.GetMemoryHistory(id)
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting history: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				result := map[string]interface{}{
+					"status":  "ok",
+					"id":      id,
+					"history": history,
+				}
+				jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Printf("History for memory %s:\n\n", id)
+				for _, h := range history {
+					fmt.Printf("Commit: %s\n", h.CommitHash)
+					fmt.Printf("Date:   %s\n", h.CommitDate.Format("2006-01-02 15:04"))
+					fmt.Printf("Content: %s\n", h.Content)
+					fmt.Println("-----------------------------------")
+				}
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	return cmd
+}
+
+func rollbackCmd() *cobra.Command {
+	var robotMode bool
+
+	cmd := &cobra.Command{
+		Use:   "rollback [id] [commit-hash]",
+		Short: "Rollback a memory to a specific version",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			id := args[0]
+			commit := args[1]
+
+			if err := store.RollbackMemory(id, commit); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error rolling back: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				fmt.Printf(`{"status":"ok","message":"rolled back memory %s to %s"}`+"\n", id, commit)
+			} else {
+				fmt.Printf("✓ Rolled back memory %s to version %s\n", id, commit)
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	return cmd
+}
+
+func linkCmd() *cobra.Command {
+	var robotMode bool
+
+	cmd := &cobra.Command{
+		Use:   "link [from-id] [to-id] [relation]",
+		Short: "Link two memories together",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			from := args[0]
+			to := args[1]
+			relation := "related"
+			if len(args) > 2 {
+				relation = args[2]
+			}
+
+			if err := store.LinkMemories(from, to, relation); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error linking: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				fmt.Printf(`{"status":"ok","message":"linked %s to %s as %s"}`+"\n", from, to, relation)
+			} else {
+				fmt.Printf("✓ Linked %s to %s (%s)\n", from, to, relation)
+			}
+		},
+	}
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "show [id]",
+		Short: "Show all links for a memory",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, _ := os.Getwd()
+			db.InitDB(repoPath)
+			defer db.CloseDB()
+
+			links, err := store.GetMemoryLinks(args[0])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+
+			if robotMode {
+				jsonBytes, _ := json.MarshalIndent(links, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Printf("Links for %s:\n", args[0])
+				for _, l := range links {
+					fmt.Printf("- %s -> %s (%s)\n", l["from_id"], l["to_id"], l["relation"])
+				}
+			}
+		},
+	})
+
+	cmd.PersistentFlags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	return cmd
+}
+
+func keystonesCmd() *cobra.Command {
+	var robotMode bool
+	var limit int
+
+	cmd := &cobra.Command{
+		Use:   "keystones",
+		Short: "Identify core/foundational memories",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			keystones, err := store.GetKeystoneMemories(limit)
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting keystones: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				result := map[string]interface{}{
+					"status":    "ok",
+					"count":     len(keystones),
+					"keystones": keystones,
+				}
+				jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Printf("Keystone Memories (%d):\n\n", len(keystones))
+				for i, m := range keystones {
+					fmt.Printf("%d. [%s] %s (Priority: %.1f, Accesses: %d)\n", i+1, m.Category, m.ID, m.Priority, m.AccessCount)
+					fmt.Printf("   %s\n\n", m.Content)
+				}
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of results")
 	return cmd
 }
 
