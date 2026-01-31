@@ -2,8 +2,8 @@
 
 > Versioned memory system for AI agents, built by agents.
 
-**Version:** 0.1.0
-**Status:** Production Ready ✅
+**Version:** 0.2.0
+**Status:** Feature Rich ✅
 
 ---
 
@@ -17,6 +17,7 @@ AMI (Agent Memory Intelligence) is a specialized "sidecar" for AI agents to mana
 - **Versioned**: Every memory change is tracked (git-like)
 - **Structured**: Categories, tags, priorities—not just text dumps
 - **Robot-first**: Pure JSON output for programmatic integration
+- **Metabolic**: Memories age and decay naturally unless reinforced
 
 ---
 
@@ -44,6 +45,9 @@ ami add "User prefers dark mode UI" \
 # Text search
 ami recall "preferences"
 
+# Decay-weighted recall (prioritizes recent/relevant facts)
+ami recall --decay --limit 5
+
 # Tag filtering
 ami recall --tags ui
 
@@ -61,6 +65,16 @@ ami update <memory-id> "Updated content"
 ami update <memory-id> --tags new,tags
 ```
 
+#### Delete a memory
+```bash
+ami delete <memory-id>
+```
+
+#### List all tags
+```bash
+ami tags
+```
+
 ---
 
 ## 📚 Commands
@@ -69,7 +83,9 @@ ami update <memory-id> --tags new,tags
 |---------|-------------|-------------|
 | `ami add [content]` | Add memory with metadata | ✅ |
 | `ami recall [query]` | Search memories with filters | ✅ |
-| `ami update [id]` | Modify existing memory | N/A |
+| `ami update [id]` | Modify existing memory | ✅ |
+| `ami delete [id]` | Remove a memory by ID | ✅ |
+| `ami tags` | List all unique tags | ✅ |
 | `ami robot status` | System status (JSON) | ✅ |
 
 ### Flags
@@ -86,6 +102,7 @@ ami update <memory-id> --tags new,tags
 - `--category`: Filter by memory type
 - `--tags`: Filter by tags
 - `--limit`: Max results (default: 10)
+- `--decay`: Use decay-weighted scoring (Ebbinghaus curve)
 
 **update**:
 - `--category`: Update category
@@ -96,44 +113,24 @@ ami update <memory-id> --tags new,tags
 
 ---
 
-## 🧪 Memory Categories
+## 🧠 Metabolic Decay
 
-| Category | Purpose | Example | Best For |
-|----------|-----------|----------|-----------|
-| **Core** | Foundational truths, identity | "I am HSA_Claude", "User timezone: LA" | Permanent facts |
-| **Semantic** | Learned patterns, habits | "User prefers concise replies" | General knowledge |
-| **Working** | Task-specific context | "Working on AMI project" | Current session |
-| **Episodic** | Event logs, one-time | "Completed AMI v0.1.0 on Jan 31" | History |
+AMI v0.2.0 introduces **Decay-Weighted Scoring**. 
+
+Memories follow a logarithmic "forgetting curve":
+`Score = (Priority * (AccessCount + 1)) / (log10(TimeDelta + 10) * CategoryDecay)`
+
+### Decay Factors by Category:
+- **Core**: 0.5 (nearly permanent)
+- **Semantic**: 1.0 (standard facts)
+- **Episodic**: 2.0 (fast fade for logs/noise)
+- **Others**: 1.5
 
 ---
 
 ## 🤖 Robot Mode
 
-Designed for agent integration. Example output:
-
-```bash
-$ ami recall --robot "preferences" --category working
-{
-  "count": 2,
-  "filters": {
-    "category": "working",
-    "tags": []
-  },
-  "memories": [
-    {
-      "id": "abc-123",
-      "content": "User prefers dark mode UI",
-      "category": "working",
-      "priority": 0.7,
-      "created_at": "2026-01-31T00:00:00Z",
-      "accessed_at": "2026-01-31T00:00:00Z",
-      "access_count": 0,
-      "tags": ["ui", "preferences"]
-    }
-  ],
-  "query": "preferences"
-}
-```
+Designed for agent integration. All CRUD operations support JSON output via the `--robot` flag.
 
 **Parsing rules:**
 - `stdout`: Pure JSON
@@ -152,98 +149,24 @@ dolt log --oneline
 
 # Rollback to previous state
 dolt checkout <commit-hash>
-
-# Create branch for experimentation
-dolt branch experiment-1
-
-# Merge branches
-dolt merge experiment-1
-```
-
-**Why this matters:**
-- Agents learn and unlearn—rollback prevents permanent corruption
-- Track knowledge evolution over time
-- Safe experimentation with branches
-
----
-
-## 💡 Best Practices
-
-### 1. Memory Shape
-```bash
-# ✅ GOOD: Atomic, tagged
-ami add "User timezone: America/Los_Angeles" --category core
-ami add "Prefers dark mode" --category semantic --tags ui
-
-# ❌ BAD: Multiple facts, no structure
-ami add "User in LA timezone likes dark mode needs export feature"
-```
-
-### 2. Tag Taxonomy
-Use hierarchical tags for powerful filtering:
-```bash
-tags: project:ami,task:implementation
-tags: user:preference,color:blue
-tags: meta:verified,meta:deprecated
-```
-
-### 3. Source Attribution
-Track where memories came from:
-```bash
---source "user-direct"    # Fact (1.0 confidence)
---source "handoff-docs"   # Documentation (0.9)
---source "inferred"        # Hypothesis (0.5)
---source "observed"        # Witnessed (0.7)
-```
-
-### 4. Memory Lifecycle
-```
-Working Memory → Semantic Memory → Core Memory
-     (active)       (generalized)        (permanent)
-```
-Promote memories as they prove valuable, delete noise.
-
----
-
-## 📊 Database Schema
-
-```sql
-CREATE TABLE memories (
-    id VARCHAR(36) PRIMARY KEY,
-    content TEXT NOT NULL,
-    category ENUM('core', 'semantic', 'working', 'episodic'),
-    priority FLOAT DEFAULT 0.5,
-    created_at TIMESTAMP,
-    accessed_at TIMESTAMP,
-    access_count INT DEFAULT 0,
-    source VARCHAR(255),
-    tags JSON
-);
-
-CREATE TABLE memory_links (
-    from_id VARCHAR(36),
-    to_id VARCHAR(36),
-    relation VARCHAR(50),
-    PRIMARY KEY (from_id, to_id, relation)
-);
 ```
 
 ---
 
 ## 🚦 Roadmap
 
-### v0.2.0 (Next Release)
-- [ ] Decay-weighted recall (Ebbinghaus curve)
-- [ ] `ami delete <id>` command
-- [ ] `ami tags list` command
-- [ ] `ami stats` analytics
-- [ ] `ami context` - Token-aware injection
+### v0.2.1 (Current Sprint)
+- [ ] `ami catchup` - Session recovery
+- [ ] `ami history <id>` - Version history per memory
+- [ ] `ami rollback <id>` - Revert memory state
+- [ ] `ami link <from> <to>` - Build knowledge graphs
+- [ ] `ami keystones` - Identify core facts
 
 ### v0.3.0 (Future)
 - [ ] Embedding-based semantic search
+- [ ] `ami context <task>` - Token-aware injection
 - [ ] Auto-consolidation (episodic → semantic)
 - [ ] Multi-agent shared memory spaces
-- [ ] Memory provenance API
 
 ---
 
@@ -261,12 +184,4 @@ CREATE TABLE memory_links (
 
 ---
 
-## 📞 Support
-
-- **Source**: `/home/hargabyte/ami/`
-- **Release Notes**: `RELEASE_v0.1.0.md`
-- **Report Issues**: #dev channel
-
----
-
-**AMI v0.1.0 - Solid foundation, agent-ready. 🚀**
+**AMI v0.2.0 - Memory with metabolism. 🚀**

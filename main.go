@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.1.0"
+var version = "0.2.0"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -31,6 +31,8 @@ Features:
 	rootCmd.AddCommand(addCmd())
 	rootCmd.AddCommand(updateCmd())
 	rootCmd.AddCommand(recallCmd())
+	rootCmd.AddCommand(deleteCmd())
+	rootCmd.AddCommand(tagsCmd())
 	rootCmd.AddCommand(checkpointCmd())
 	rootCmd.AddCommand(consolidateCmd())
 	rootCmd.AddCommand(robotCmd())
@@ -46,6 +48,7 @@ func addCmd() *cobra.Command {
 	var priority float64
 	var tags []string
 	var source string
+	var robotMode bool
 
 	cmd := &cobra.Command{
 		Use:   "add [content]",
@@ -55,12 +58,20 @@ func addCmd() *cobra.Command {
 			// Initialize database
 			repoPath, err := os.Getwd()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
 				os.Exit(1)
 			}
 
 			if err := db.InitDB(repoPath); err != nil {
-				fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
 				os.Exit(1)
 			}
 			defer db.CloseDB()
@@ -68,13 +79,21 @@ func addCmd() *cobra.Command {
 			// Validate category
 			cat := models.Category(category)
 			if !cat.IsValid() {
-				fmt.Fprintf(os.Stderr, "Error: invalid category '%s'. Must be one of: core, semantic, working, episodic\n", category)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"invalid category %s"}`+"\n", category)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error: invalid category '%s'. Must be one of: core, semantic, working, episodic\n", category)
+				}
 				os.Exit(1)
 			}
 
 			// Validate priority
 			if priority < 0.0 || priority > 1.0 {
-				fmt.Fprintf(os.Stderr, "Error: priority must be between 0.0 and 1.0\n")
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"priority must be between 0.0 and 1.0"}`+"\n")
+				} else {
+					fmt.Fprintf(os.Stderr, "Error: priority must be between 0.0 and 1.0\n")
+				}
 				os.Exit(1)
 			}
 
@@ -89,17 +108,31 @@ func addCmd() *cobra.Command {
 			// Add the memory
 			memory, err := store.AddMemory(content, cat, priority, tags, source)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error adding memory: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error adding memory: %v\n", err)
+				}
 				os.Exit(1)
 			}
 
-			fmt.Printf("✓ Added memory %s (category: %s, priority: %.1f)\n", memory.ID, memory.Category, memory.Priority)
+			if robotMode {
+				result := map[string]interface{}{
+					"status": "ok",
+					"memory": memory,
+				}
+				jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Printf("✓ Added memory %s (category: %s, priority: %.1f)\n", memory.ID, memory.Category, memory.Priority)
+			}
 		},
 	}
 	cmd.Flags().StringVar(&category, "category", "episodic", "Memory category (core|semantic|working|episodic)")
 	cmd.Flags().Float64Var(&priority, "priority", 0.5, "Priority (0.0-1.0)")
 	cmd.Flags().StringSliceVar(&tags, "tags", []string{}, "Tags for the memory")
 	cmd.Flags().StringVar(&source, "source", "", "Source of the memory (optional)")
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	return cmd
 }
 
@@ -108,6 +141,7 @@ func updateCmd() *cobra.Command {
 	var priority float64
 	var tags []string
 	var source string
+	var robotMode bool
 
 	cmd := &cobra.Command{
 		Use:   "update [id] [new-content]",
@@ -117,12 +151,20 @@ func updateCmd() *cobra.Command {
 			// Initialize database
 			repoPath, err := os.Getwd()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
 				os.Exit(1)
 			}
 
 			if err := db.InitDB(repoPath); err != nil {
-				fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
 				os.Exit(1)
 			}
 			defer db.CloseDB()
@@ -138,7 +180,11 @@ func updateCmd() *cobra.Command {
 			if cmd.Flags().Changed("category") {
 				cat := models.Category(category)
 				if !cat.IsValid() {
-					fmt.Fprintf(os.Stderr, "Error: invalid category '%s'. Must be one of: core, semantic, working, episodic\n", category)
+					if robotMode {
+						fmt.Printf(`{"status":"error","message":"invalid category %s"}`+"\n", category)
+					} else {
+						fmt.Fprintf(os.Stderr, "Error: invalid category '%s'. Must be one of: core, semantic, working, episodic\n", category)
+					}
 					os.Exit(1)
 				}
 				params.Category = &cat
@@ -146,7 +192,11 @@ func updateCmd() *cobra.Command {
 
 			if cmd.Flags().Changed("priority") {
 				if priority < 0.0 || priority > 1.0 {
-					fmt.Fprintf(os.Stderr, "Error: priority must be between 0.0 and 1.0\n")
+					if robotMode {
+						fmt.Printf(`{"status":"error","message":"priority must be between 0.0 and 1.0"}`+"\n")
+					} else {
+						fmt.Fprintf(os.Stderr, "Error: priority must be between 0.0 and 1.0\n")
+					}
 					os.Exit(1)
 				}
 				params.Priority = &priority
@@ -173,17 +223,26 @@ func updateCmd() *cobra.Command {
 
 			// Update the memory
 			if err := store.UpdateMemory(params); err != nil {
-				fmt.Fprintf(os.Stderr, "Error updating memory: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error updating memory: %v\n", err)
+				}
 				os.Exit(1)
 			}
 
-			fmt.Printf("✓ Updated memory %s\n", id)
+			if robotMode {
+				fmt.Printf(`{"status":"ok","message":"updated memory %s"}`+"\n", id)
+			} else {
+				fmt.Printf("✓ Updated memory %s\n", id)
+			}
 		},
 	}
 	cmd.Flags().StringVar(&category, "category", "", "Memory category (core|semantic|working|episodic)")
 	cmd.Flags().Float64Var(&priority, "priority", -1, "Priority (0.0-1.0)")
 	cmd.Flags().StringSliceVar(&tags, "tags", []string{}, "Tags for the memory")
 	cmd.Flags().StringVar(&source, "source", "", "Source of the memory (optional)")
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	return cmd
 }
 
@@ -192,6 +251,7 @@ func recallCmd() *cobra.Command {
 	var limit int
 	var tagsFilter []string
 	var categoryFilter string
+	var withDecay bool
 
 	cmd := &cobra.Command{
 		Use:   "recall [query]",
@@ -201,12 +261,20 @@ func recallCmd() *cobra.Command {
 			// Initialize database
 			repoPath, err := os.Getwd()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
 				os.Exit(1)
 			}
 
 			if err := db.InitDB(repoPath); err != nil {
-				fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
 				os.Exit(1)
 			}
 			defer db.CloseDB()
@@ -218,22 +286,28 @@ func recallCmd() *cobra.Command {
 
 			// Build filter options
 			opts := store.RecallOptions{
-				Query:    query,
-				Limit:    limit,
-				Tags:     tagsFilter,
-				Category: categoryFilter,
+				Query:      query,
+				Limit:      limit,
+				Tags:       tagsFilter,
+				Category:   categoryFilter,
+				WithDecay:  withDecay,
 			}
 
 			// Search memories
 			memories, err := store.RecallMemories(opts)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error recalling memories: %v\n", err)
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error recalling memories: %v\n", err)
+				}
 				os.Exit(1)
 			}
 
 			if robotMode {
 				// Robot Mode: Pure JSON to stdout
 				result := map[string]interface{}{
+					"status":   "ok",
 					"query":    query,
 					"filters":  map[string]interface{}{"tags": tagsFilter, "category": categoryFilter},
 					"count":    len(memories),
@@ -289,6 +363,116 @@ func recallCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of results")
 	cmd.Flags().StringSliceVar(&tagsFilter, "tags", []string{}, "Filter by tags (all tags must match)")
 	cmd.Flags().StringVar(&categoryFilter, "category", "", "Filter by category (core|semantic|working|episodic)")
+	cmd.Flags().BoolVar(&withDecay, "decay", false, "Use decay-weighted scoring for recall")
+	return cmd
+}
+
+func deleteCmd() *cobra.Command {
+	var robotMode bool
+
+	cmd := &cobra.Command{
+		Use:   "delete [id]",
+		Short: "Delete a memory by ID",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			id := args[0]
+
+			// Delete the memory
+			if err := store.DeleteMemory(id); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error deleting memory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				fmt.Printf(`{"status":"ok","message":"deleted memory %s"}`+"\n", id)
+			} else {
+				fmt.Printf("✓ Deleted memory %s\n", id)
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	return cmd
+}
+
+func tagsCmd() *cobra.Command {
+	var robotMode bool
+
+	cmd := &cobra.Command{
+		Use:   "tags",
+		Short: "List all unique tags",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			tags, err := store.ListTags()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error listing tags: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				result := map[string]interface{}{
+					"status": "ok",
+					"tags":   tags,
+				}
+				jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Println("Unique Tags:")
+				for _, tag := range tags {
+					fmt.Printf("- %s\n", tag)
+				}
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	return cmd
 }
 

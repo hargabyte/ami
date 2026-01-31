@@ -15,10 +15,11 @@ import (
 
 // RecallOptions specifies filters for memory recall
 type RecallOptions struct {
-	Query    string
-	Limit    int
-	Tags     []string
-	Category string
+	Query      string
+	Limit      int
+	Tags       []string
+	Category   string
+	WithDecay  bool
 }
 
 // UpdateParams specifies fields to update on a memory
@@ -142,13 +143,33 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 	}
 
 	// Build query
-	searchQuery := fmt.Sprintf(`
-		SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags
-		FROM memories
-		%s
-		ORDER BY priority DESC, accessed_at DESC
-		LIMIT %d
-	`, whereClause, opts.Limit)
+	var searchQuery string
+	if opts.WithDecay {
+		// Use logarithmic decay scoring:
+		// Score = (Priority * (AccessCount + 1)) / (log10(TimeDelta + 10) * CategoryDecay)
+		searchQuery = fmt.Sprintf(`
+			SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags,
+			(priority * (access_count + 1)) / (LOG10(TIMESTAMPDIFF(SECOND, accessed_at, NOW()) + 10) * 
+			CASE 
+				WHEN category = 'core' THEN 0.5 
+				WHEN category = 'semantic' THEN 1.0 
+				WHEN category = 'episodic' THEN 2.0 
+				ELSE 1.5 
+			END) as recall_score
+			FROM memories
+			%s
+			ORDER BY recall_score DESC
+			LIMIT %d
+		`, whereClause, opts.Limit)
+	} else {
+		searchQuery = fmt.Sprintf(`
+			SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags
+			FROM memories
+			%s
+			ORDER BY priority DESC, accessed_at DESC
+			LIMIT %d
+		`, whereClause, opts.Limit)
+	}
 
 	output, err := ExecDoltSQLJSON(searchQuery)
 	if err != nil {
@@ -221,6 +242,74 @@ func UpdateMemory(params UpdateParams) error {
 	}
 
 	return nil
+}
+
+// DeleteMemory deletes a memory by ID
+func DeleteMemory(id string) error {
+	query := fmt.Sprintf("DELETE FROM memories WHERE id = '%s'", id)
+
+	if _, err := db.ExecDoltSQL(query); err != nil {
+		return fmt.Errorf("failed to delete memory: %w", err)
+	}
+
+	// Create Dolt commit
+	commitMsg := fmt.Sprintf("Delete memory: %s", id)
+	if err := DoltCommit(commitMsg); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create Dolt commit: %v\n", err)
+	}
+
+	return nil
+}
+
+// ListTags returns all unique tags in the database
+func ListTags() ([]string, error) {
+	// Use JSON_OVERLAPS or similar if supported, but simple way is to select all and unique in Go
+	// Better: SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(tags, '$[*]')) FROM memories
+	// Dolt supports JSON functions. Let's try to flatten.
+	// Actually, easier to fetch all tags and unique them in Go for now.
+	query := "SELECT tags FROM memories WHERE tags IS NOT NULL AND tags != '[]'"
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch tags: %w", err)
+	}
+
+	var result struct {
+		Rows []map[string]interface{} `json:"rows"`
+	}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		return nil, err
+	}
+
+	tagMap := make(map[string]bool)
+	for _, row := range result.Rows {
+		v, ok := row["tags"]
+		if !ok || v == nil {
+			continue
+		}
+
+		var tags []string
+		switch val := v.(type) {
+		case string:
+			if val != "" && val != "[]" {
+				json.Unmarshal([]byte(val), &tags)
+			}
+		case []interface{}:
+			for _, t := range val {
+				tags = append(tags, fmt.Sprintf("%v", t))
+			}
+		}
+
+		for _, tag := range tags {
+			tagMap[tag] = true
+		}
+	}
+
+	uniqueTags := make([]string, 0, len(tagMap))
+	for tag := range tagMap {
+		uniqueTags = append(uniqueTags, tag)
+	}
+
+	return uniqueTags, nil
 }
 
 // GetMemoryCount returns total number of memories
