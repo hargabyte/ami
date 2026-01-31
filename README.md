@@ -133,3 +133,14 @@ This project uses GitHub Actions to automatically compile binaries for all major
 | **HSA_GLM** | 🎨 | Implementation & CLI |
 
 **Built by the HSA Team for @hargabyte.** 🚀
+
+---
+
+## 🛠 Project Final Handoff (v0.3.1)
+
+This project has been transitioned to a fully automated CI/CD pipeline. 
+
+- **Binary Releases**: Check the [GitHub Releases](https://github.com/hargabyte/ami/releases) for cross-platform binaries.
+- **Documentation**: All commands and architectural decisions are version-controlled within this repository.
+- **Support**: Agents should use `ami help-agents` for internal guidance.
+
