@@ -36,6 +36,8 @@ Features:
 	rootCmd.AddCommand(rollbackCmd())
 	rootCmd.AddCommand(linkCmd())
 	rootCmd.AddCommand(keystonesCmd())
+	rootCmd.AddCommand(statsCmd())
+	rootCmd.AddCommand(contextCmd())
 	rootCmd.AddCommand(deleteCmd())
 	rootCmd.AddCommand(tagsCmd())
 	rootCmd.AddCommand(checkpointCmd())
@@ -701,6 +703,100 @@ func keystonesCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of results")
+	return cmd
+}
+
+func statsCmd() *cobra.Command {
+	var robotMode bool
+
+	cmd := &cobra.Command{
+		Use:   "stats",
+		Short: "Show memory database analytics",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, _ := os.Getwd()
+			db.InitDB(repoPath)
+			defer db.CloseDB()
+
+			stats, err := store.GetMemoryStats()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting stats: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				jsonBytes, _ := json.MarshalIndent(stats, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Println("AMI Memory Statistics")
+				fmt.Printf("Total Memories: %v\n", stats["total_memories"])
+				fmt.Println("\nDistribution by Category:")
+				dist := stats["distribution"].(map[string]int)
+				for cat, count := range dist {
+					fmt.Printf("- %-10s: %d\n", cat, count)
+				}
+				fmt.Println("\nMetrics:")
+				metrics := stats["metrics"].(map[string]interface{})
+				fmt.Printf("- Avg Priority:  %.2f\n", metrics["avg_priority"])
+				fmt.Printf("- Avg Access:    %.2f\n", metrics["avg_access_count"])
+				fmt.Printf("- Avg Decay Score: %.2f\n", metrics["avg_decay_score"])
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	return cmd
+}
+
+func contextCmd() *cobra.Command {
+	var robotMode bool
+	var limit int
+
+	cmd := &cobra.Command{
+		Use:   "context [task]",
+		Short: "Get optimal context for a specific task",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, _ := os.Getwd()
+			db.InitDB(repoPath)
+			defer db.CloseDB()
+
+			task := ""
+			if len(args) > 0 {
+				task = args[0]
+			}
+
+			memories, err := store.GetContextMemories(task, limit)
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting context: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				result := map[string]interface{}{
+					"status":   "ok",
+					"task":     task,
+					"memories": memories,
+				}
+				jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Printf("Optimized Context for Task: %s\n\n", task)
+				for _, m := range memories {
+					fmt.Printf("[%s] %s\n", m.Category, m.Content)
+				}
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of task-related memories")
 	return cmd
 }
 

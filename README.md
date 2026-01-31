@@ -91,6 +91,8 @@ ami tags
 | `ami rollback [id] [commit]` | Revert memory to version | ✅ |
 | `ami link [from] [to]` | Link two memories | ✅ |
 | `ami keystones` | Identify core facts | ✅ |
+| `ami stats` | Memory database analytics | ✅ |
+| `ami context [task]` | Optimized context for tasks | ✅ |
 | `ami robot status` | System status (JSON) | ✅ |
 
 ### Flags

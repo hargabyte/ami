@@ -37,6 +37,16 @@ Identifies foundational truths.
 - Automatically ranks memories by access frequency, linkage density, and priority.
 - Helps agents distinguish between "noise" and "foundational instructions."
 
+### 6. 📊 Memory Analytics (`ami stats`)
+Get high-level insights into your memory database.
+- Shows distribution by category.
+- Provides metrics like average priority, access frequency, and decay scores.
+
+### 7. 🧠 Task Context (`ami context [task]`)
+Automatically gather the best context for a prompt.
+- Combines foundational `core` facts with task-relevant memories.
+- Uses decay-weighted scoring to ensure only the most useful info is presented.
+
 ---
 
 ## 🛠 Technical Changes

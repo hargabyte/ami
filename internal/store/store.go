@@ -351,6 +351,44 @@ func GetKeystoneMemories(limit int) ([]models.Memory, error) {
 	return parseMemoriesJSON(output)
 }
 
+// GetContextMemories returns memories optimized for prompt context
+func GetContextMemories(task string, limit int) ([]models.Memory, error) {
+	// First, get high-priority core facts
+	coreOpts := RecallOptions{
+		Category: "core",
+		Limit:    5,
+	}
+	coreMemories, _ := RecallMemories(coreOpts)
+
+	// Second, get task-relevant memories with decay
+	taskOpts := RecallOptions{
+		Query:     task,
+		Limit:     limit,
+		WithDecay: true,
+	}
+	taskMemories, _ := RecallMemories(taskOpts)
+
+	// Combine and deduplicate
+	seen := make(map[string]bool)
+	var final []models.Memory
+
+	for _, m := range coreMemories {
+		if !seen[m.ID] {
+			final = append(final, m)
+			seen[m.ID] = true
+		}
+	}
+
+	for _, m := range taskMemories {
+		if !seen[m.ID] {
+			final = append(final, m)
+			seen[m.ID] = true
+		}
+	}
+
+	return final, nil
+}
+
 // UpdateMemory updates an existing memory
 func UpdateMemory(params UpdateParams) error {
 	// Build SET clause
@@ -525,6 +563,82 @@ func ListTags() ([]string, error) {
 	}
 
 	return uniqueTags, nil
+}
+
+// GetMemoryStats returns analytics about the memory database
+func GetMemoryStats() (map[string]interface{}, error) {
+	// Category distribution
+	distQuery := `
+		SELECT category, COUNT(*) as count 
+		FROM memories 
+		GROUP BY category
+	`
+	output, err := ExecDoltSQLJSON(distQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	var distResult struct {
+		Rows []map[string]interface{} `json:"rows"`
+	}
+	json.Unmarshal([]byte(output), &distResult)
+
+	distribution := make(map[string]int)
+	total := 0
+	for _, row := range distResult.Rows {
+		cat := asString(row["category"])
+		count := asInt(row["count"])
+		distribution[cat] = count
+		total += count
+	}
+
+	// Average priority and decay
+	metricsQuery := `
+		SELECT 
+			AVG(priority) as avg_priority,
+			AVG(access_count) as avg_access,
+			AVG(recall_score) as avg_decay_score
+		FROM (
+			SELECT priority, access_count,
+			(priority * (access_count + 1)) / (LOG10(TIMESTAMPDIFF(SECOND, accessed_at, NOW()) + 10) * 
+			CASE 
+				WHEN category = 'core' THEN 0.5 
+				WHEN category = 'semantic' THEN 1.0 
+				WHEN category = 'episodic' THEN 2.0 
+				ELSE 1.5 
+			END) as recall_score
+			FROM memories
+		) as metrics
+	`
+	output, err = ExecDoltSQLJSON(metricsQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	var metricsResult struct {
+		Rows []map[string]interface{} `json:"rows"`
+	}
+	json.Unmarshal([]byte(output), &metricsResult)
+
+	avgPriority := 0.0
+	avgAccess := 0.0
+	avgDecay := 0.0
+	if len(metricsResult.Rows) > 0 {
+		row := metricsResult.Rows[0]
+		avgPriority = asFloat64(row["avg_priority"])
+		avgAccess = asFloat64(row["avg_access"])
+		avgDecay = asFloat64(row["avg_decay_score"])
+	}
+
+	return map[string]interface{}{
+		"total_memories": total,
+		"distribution":   distribution,
+		"metrics": map[string]interface{}{
+			"avg_priority":     avgPriority,
+			"avg_access_count": avgAccess,
+			"avg_decay_score":  avgDecay,
+		},
+	}, nil
 }
 
 // GetMemoryCount returns total number of memories
