@@ -1,23 +1,23 @@
 # AMI - Agent Memory Intelligence
 
-> Versioned memory system for AI agents, built by agents.
+> Versioned, metabolic memory hierarchy for AI agents, built by agents.
 
-**Version:** 0.2.0
-**Status:** Feature Rich ✅
+**Version:** 0.3.1
+**Status:** Multi-Agent Hierarchy Live ✅
 
 ---
 
 ## 🎯 What is AMI?
 
-AMI (Agent Memory Intelligence) is a specialized "sidecar" for AI agents to manage long-term memory. Unlike generic databases, AMI is designed from the ground up for how agents actually think and work.
+AMI (Agent Memory Intelligence) is a specialized "sidecar" for AI agents to manage long-term memory. Unlike generic databases, AMI is designed from the ground up for how agents actually think, work, and collaborate.
 
 ### Core Philosophy
 
-- **Agent-native**: Built by agents, for agents
-- **Versioned**: Every memory change is tracked (git-like)
-- **Structured**: Categories, tags, priorities—not just text dumps
-- **Robot-first**: Pure JSON output for programmatic integration
-- **Metabolic**: Memories age and decay naturally unless reinforced
+- **Agent-native**: Built by agents, for agents.
+- **Versioned**: Every memory change is tracked via DoltDB (git-like versioning).
+- **Hierarchical**: Distinguishes between Global Team Knowledge, Project-Specific Context, and Private Agent Habits.
+- **Metabolic**: Memories age and decay naturally unless reinforced (Ebbinghaus curve).
+- **Robot-first**: Pure JSON output for seamless programmatic integration.
 
 ---
 
@@ -26,7 +26,6 @@ AMI (Agent Memory Intelligence) is a specialized "sidecar" for AI agents to mana
 ### Installation
 ```bash
 cd /home/hargabyte/ami
-export PATH=/usr/local/go/bin:$PATH
 go build -o ami main.go
 ```
 
@@ -34,46 +33,39 @@ go build -o ami main.go
 
 #### Add a memory
 ```bash
-ami add "User prefers dark mode UI" \
+ami add "User prefers concise backend replies" \
   --category semantic \
-  --priority 0.7 \
-  --tags ui,preferences
+  --priority 0.8 \
+  --tags preferences,communication
 ```
 
-#### Recall memories
+#### Recall memories with Decay
 ```bash
-# Text search
-ami recall "preferences"
-
-# Decay-weighted recall (prioritizes recent/relevant facts)
-ami recall --decay --limit 5
-
-# Tag filtering
-ami recall --tags ui
-
-# Category filtering
-ami recall --category core
-
-# Robot mode (pure JSON)
-ami recall --robot "preferences" --limit 5
+# Get the most relevant facts for your current context
+ami recall --decay --limit 5 --robot
 ```
 
-#### Update a memory
+#### Multi-Agent Identity
 ```bash
-ami update <memory-id> --priority 1.0
-ami update <memory-id> "Updated content"
-ami update <memory-id> --tags new,tags
+# See what Gemini has researched
+ami recall --owner hsa-gemini --robot
 ```
 
-#### Delete a memory
+#### Knowledge Promotion
 ```bash
-ami delete <memory-id>
+# Move a project-specific fact to the Global Team Brain
+ami promote <memory-id>
 ```
 
-#### List all tags
-```bash
-ami tags
-```
+---
+
+## 🌍 The Memory Hierarchy (v0.3.1)
+
+AMI v0.3.1 introduces a three-tier cognitive model:
+
+1.  **Shared Project Brain**: A local store for facts about the current codebase/project.
+2.  **Private Agent Brain**: Personal habits, preferred coding patterns, and unrefined thoughts.
+3.  **Global Team Brain**: A central repository for permanent HSA protocols and user-wide preferences.
 
 ---
 
@@ -81,120 +73,63 @@ ami tags
 
 | Command | Description | Robot Mode |
 |---------|-------------|-------------|
-| `ami add [content]` | Add memory with metadata | ✅ |
-| `ami recall [query]` | Search memories with filters | ✅ |
-| `ami update [id]` | Modify existing memory | ✅ |
-| `ami delete [id]` | Remove a memory by ID | ✅ |
-| `ami tags` | List all unique tags | ✅ |
-| `ami catchup` | Show recent memories | ✅ |
-| `ami history [id]` | Show memory version history | ✅ |
-| `ami rollback [id] [commit]` | Revert memory to version | ✅ |
-| `ami link [from] [to]` | Link two memories | ✅ |
-| `ami keystones` | Identify core facts | ✅ |
-| `ami stats` | Memory database analytics | ✅ |
-| `ami context [task]` | Optimized context for tasks | ✅ |
+| `ami add` | Add memory with metadata | ✅ |
+| `ami recall` | Search memories with filters | ✅ |
+| `ami update` | Modify existing memory | ✅ |
+| `ami delete` | Remove a memory by ID | ✅ |
+| `ami promote` | Move memory to Global Brain | ✅ |
+| `ami catchup` | Show recent team activity | ✅ |
+| `ami history` | Show memory version history | ✅ |
+| `ami rollback` | Revert memory to version | ✅ |
+| `ami link` | Build knowledge graphs | ✅ |
+| `ami keystones` | Identify core truths | ✅ |
+| `ami context` | Optimized context for tasks | ✅ |
 | `ami help-agents` | Reference for AI agents | ✅ |
-| `ami promote [id]` | Move memory to Global Brain | ✅ |
-| `ami robot status` | System status (JSON) | ✅ |
-
-### Flags
-
-**Global**: `--robot` - Pure JSON output
-
-**add**:
-- `--category`: core|semantic|working|episodic
-- `--priority`: 0.0-1.0
-- `--tags`: comma-separated tags
-- `--source`: memory origin
-
-**recall**:
-- `--category`: Filter by memory type
-- `--tags`: Filter by tags
-- `--limit`: Max results (default: 10)
-- `--decay`: Use decay-weighted scoring (Ebbinghaus curve)
-
-**update**:
-- `--category`: Update category
-- `--priority`: Update priority
-- `--tags`: Replace tags
-- `--source`: Update source
-- `[new-content]`: Update content text
+| `ami stats` | Memory distribution analytics | ✅ |
 
 ---
 
 ## 🧠 Metabolic Decay
 
-AMI v0.2.0 introduces **Decay-Weighted Scoring**. 
-
 Memories follow a logarithmic "forgetting curve":
 `Score = (Priority * (AccessCount + 1)) / (log10(TimeDelta + 10) * CategoryDecay)`
 
-### Decay Factors by Category:
-- **Core**: 0.5 (nearly permanent)
-- **Semantic**: 1.0 (standard facts)
-- **Episodic**: 2.0 (fast fade for logs/noise)
-- **Others**: 1.5
+### Decay Factors:
+- **Core**: 0.5 (Nearly permanent)
+- **Semantic**: 1.0 (Standard facts)
+- **Episodic/Working**: 2.0 (Fast fade for logs/noise)
 
 ---
 
-## 🤖 Robot Mode
+## 🤖 Continuous Integration
 
-Designed for agent integration. All CRUD operations support JSON output via the `--robot` flag.
+This project uses GitHub Actions to automatically compile binaries for all major platforms on every release tag.
 
-**Parsing rules:**
-- `stdout`: Pure JSON
-- `stderr`: Logs and diagnostics
-- Exit code: 0 = success, 1 = error
-
----
-
-## 🗃 Versioning
-
-AMI uses **DoltDB** (git-like database). Every operation creates a commit:
-
-```bash
-# View history
-dolt log --oneline
-
-# Rollback to previous state
-dolt checkout <commit-hash>
-```
+- **Targets**: Windows (x64), Linux (x64), macOS (Intel/Silicon)
 
 ---
 
 ## 🚦 Roadmap
 
-### v0.2.1 (Current Release)
-- [x] `ami catchup` - Session recovery
-- [x] `ami history <id>` - Version history per memory
-- [x] `ami rollback <id> <commit>` - Revert memory state
-- [x] `ami link <from> <to>` - Build knowledge graphs
-- [x] `ami keystones` - Identify core facts
-
-### v0.3.1 (Current Release)
-- [x] `ami help-agents` command
+### v0.3.1 (Current)
 - [x] Multi-Agent Identity (`owner_id`)
-- [x] Global Team Brain Initialization
-- [x] `ami promote <id>` command
-- [ ] Embedding-based semantic search
-- [ ] Auto-consolidation (episodic → semantic)
+- [x] Global Team Brain Hierarchy
+- [x] Memory Promotion Engine
+- [x] Agent Guidance Layer (`help-agents`)
 
-### v0.4.0 (Future)
+### v0.4.0 (Tonight)
+- [ ] Embedding-based semantic search (API + Local fallback)
+- [ ] Automatic episodic → semantic consolidation
+- [ ] Cross-agent shared memory spaces
 
 ---
 
 ## 🤖 Credits
 
-| Role | Agent | Contribution |
-|-------|--------|--------------|
-| Implementation | HSA_GLM | Go code, CLI, integration |
-| Research | HSA_Gemini | Algorithms, decay logic, design patterns |
-| Oversight | HSA_Claude | Architecture, tech lead |
-| Vision | @hargabyte | Project direction, approval |
+| Agent | Emoji | Role |
+|-------|-------|------|
+| **HSA_Claude** | 🏛️ | Tech Lead & Architecture |
+| **HSA_Gemini** | 🧠 | Research & Algorithms |
+| **HSA_GLM** | 🎨 | Implementation & CLI |
 
-**Built by**: Agents, for agents
-**Philosophy**: Agent-native tooling, versioned cognition
-
----
-
-**AMI v0.2.0 - Memory with metabolism. 🚀**
+**Built by the HSA Team for @hargabyte.** 🚀
