@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.2.1"
+var version = "0.3.0"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -38,6 +38,7 @@ Features:
 	rootCmd.AddCommand(keystonesCmd())
 	rootCmd.AddCommand(statsCmd())
 	rootCmd.AddCommand(contextCmd())
+	rootCmd.AddCommand(promoteCmd())
 	rootCmd.AddCommand(deleteCmd())
 	rootCmd.AddCommand(tagsCmd())
 	rootCmd.AddCommand(checkpointCmd())
@@ -52,6 +53,7 @@ Features:
 
 func addCmd() *cobra.Command {
 	var category string
+	var ownerID string
 	var priority float64
 	var tags []string
 	var source string
@@ -113,7 +115,7 @@ func addCmd() *cobra.Command {
 			}
 
 			// Add the memory
-			memory, err := store.AddMemory(content, cat, priority, tags, source)
+			memory, err := store.AddMemory(content, ownerID, cat, priority, tags, source)
 			if err != nil {
 				if robotMode {
 					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
@@ -136,6 +138,7 @@ func addCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&category, "category", "episodic", "Memory category (core|semantic|working|episodic)")
+	cmd.Flags().StringVar(&ownerID, "owner", "system", "ID of the agent owning this memory")
 	cmd.Flags().Float64Var(&priority, "priority", 0.5, "Priority (0.0-1.0)")
 	cmd.Flags().StringSliceVar(&tags, "tags", []string{}, "Tags for the memory")
 	cmd.Flags().StringVar(&source, "source", "", "Source of the memory (optional)")
@@ -145,6 +148,7 @@ func addCmd() *cobra.Command {
 
 func updateCmd() *cobra.Command {
 	var category string
+	var ownerID string
 	var priority float64
 	var tags []string
 	var source string
@@ -184,6 +188,10 @@ func updateCmd() *cobra.Command {
 			}
 
 			// Only update fields that were explicitly set
+			if cmd.Flags().Changed("owner") {
+				params.OwnerID = &ownerID
+			}
+
 			if cmd.Flags().Changed("category") {
 				cat := models.Category(category)
 				if !cat.IsValid() {
@@ -246,6 +254,7 @@ func updateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&category, "category", "", "Memory category (core|semantic|working|episodic)")
+	cmd.Flags().StringVar(&ownerID, "owner", "", "Update memory owner")
 	cmd.Flags().Float64Var(&priority, "priority", -1, "Priority (0.0-1.0)")
 	cmd.Flags().StringSliceVar(&tags, "tags", []string{}, "Tags for the memory")
 	cmd.Flags().StringVar(&source, "source", "", "Source of the memory (optional)")
@@ -258,6 +267,7 @@ func recallCmd() *cobra.Command {
 	var limit int
 	var tagsFilter []string
 	var categoryFilter string
+	var ownerFilter string
 	var withDecay bool
 
 	cmd := &cobra.Command{
@@ -297,6 +307,7 @@ func recallCmd() *cobra.Command {
 				Limit:      limit,
 				Tags:       tagsFilter,
 				Category:   categoryFilter,
+				OwnerID:    ownerFilter,
 				WithDecay:  withDecay,
 			}
 
@@ -316,7 +327,7 @@ func recallCmd() *cobra.Command {
 				result := map[string]interface{}{
 					"status":   "ok",
 					"query":    query,
-					"filters":  map[string]interface{}{"tags": tagsFilter, "category": categoryFilter},
+					"filters":  map[string]interface{}{"tags": tagsFilter, "category": categoryFilter, "owner": ownerFilter},
 					"count":    len(memories),
 					"memories": memories,
 				}
@@ -370,6 +381,7 @@ func recallCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of results")
 	cmd.Flags().StringSliceVar(&tagsFilter, "tags", []string{}, "Filter by tags (all tags must match)")
 	cmd.Flags().StringVar(&categoryFilter, "category", "", "Filter by category (core|semantic|working|episodic)")
+	cmd.Flags().StringVar(&ownerFilter, "owner", "", "Filter by memory owner")
 	cmd.Flags().BoolVar(&withDecay, "decay", false, "Use decay-weighted scoring for recall")
 	return cmd
 }
@@ -797,6 +809,42 @@ func contextCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of task-related memories")
+	return cmd
+}
+
+func promoteCmd() *cobra.Command {
+	var robotMode bool
+	var globalPath string
+
+	cmd := &cobra.Command{
+		Use:   "promote [id]",
+		Short: "Promote a memory to the global team brain",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, _ := os.Getwd()
+			db.InitDB(repoPath)
+			defer db.CloseDB()
+
+			id := args[0]
+			if err := store.PromoteMemory(id, globalPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error promoting memory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				fmt.Printf(`{"status":"ok","message":"promoted memory %s to global store"}`+"\n", id)
+			} else {
+				fmt.Printf("✓ Promoted memory %s to global brain (%s)\n", id, globalPath)
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+	cmd.Flags().StringVar(&globalPath, "path", "/home/hargabyte/.ami/global", "Path to the global AMI store")
 	return cmd
 }
 

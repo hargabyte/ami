@@ -55,6 +55,7 @@ func (t Tags) Value() (driver.Value, error) {
 type Memory struct {
 	ID          string     `json:"id"`
 	Content     string     `json:"content"`
+	OwnerID     string     `json:"owner_id"`
 	Category    Category   `json:"category"`
 	Priority    float64    `json:"priority"`
 	CreatedAt   time.Time  `json:"created_at"`

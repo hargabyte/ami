@@ -26,6 +26,7 @@ type RecallOptions struct {
 	Limit      int
 	Tags       []string
 	Category   string
+	OwnerID    string
 	WithDecay  bool
 }
 
@@ -33,6 +34,7 @@ type RecallOptions struct {
 type UpdateParams struct {
 	ID       string
 	Content  *string
+	OwnerID  *string
 	Category *models.Category
 	Priority *float64
 	Source   *string
@@ -63,10 +65,15 @@ func ExecDoltSQLJSON(query string) (string, error) {
 }
 
 // AddMemory adds a new memory to the database and creates a Dolt commit
-func AddMemory(content string, category models.Category, priority float64, tags []string, source string) (*models.Memory, error) {
+func AddMemory(content string, ownerID string, category models.Category, priority float64, tags []string, source string) (*models.Memory, error) {
 	// Generate UUID
 	id := uuid.New().String()
 	now := time.Now().Format("2006-01-02 15:04:05")
+
+	// Set default owner if empty
+	if ownerID == "" {
+		ownerID = "system"
+	}
 
 	// Convert tags to JSON for SQL
 	tagsJSON, err := json.Marshal(tags)
@@ -80,9 +87,9 @@ func AddMemory(content string, category models.Category, priority float64, tags 
 
 	// Insert memory using dolt CLI
 	query := fmt.Sprintf(`
-		INSERT INTO memories (id, content, category, priority, created_at, accessed_at, access_count, source, tags)
-		VALUES ('%s', '%s', '%s', %f, '%s', '%s', 0, '%s', '%s')
-	`, id, escapedContent, string(category), priority, now, now, escapedSource, string(tagsJSON))
+		INSERT INTO memories (id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags)
+		VALUES ('%s', '%s', '%s', '%s', %f, '%s', '%s', 0, '%s', '%s')
+	`, id, escapedContent, ownerID, string(category), priority, now, now, escapedSource, string(tagsJSON))
 
 	_, err = db.ExecDoltSQL(query)
 	if err != nil {
@@ -106,6 +113,7 @@ func AddMemory(content string, category models.Category, priority float64, tags 
 	return &models.Memory{
 		ID:          id,
 		Content:     content,
+		OwnerID:     ownerID,
 		Category:    category,
 		Priority:    priority,
 		CreatedAt:   createdTime,
@@ -171,6 +179,11 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 		}
 	}
 
+	// Owner filter
+	if opts.OwnerID != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("owner_id = '%s'", opts.OwnerID))
+	}
+
 	// Tags filter - check JSON_CONTAINS
 	if len(opts.Tags) > 0 {
 		for _, tag := range opts.Tags {
@@ -191,7 +204,7 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 		// Use logarithmic decay scoring:
 		// Score = (Priority * (AccessCount + 1)) / (log10(TimeDelta + 10) * CategoryDecay)
 		searchQuery = fmt.Sprintf(`
-			SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags,
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags,
 			(priority * (access_count + 1)) / (LOG10(TIMESTAMPDIFF(SECOND, accessed_at, NOW()) + 10) * 
 			CASE 
 				WHEN category = 'core' THEN 0.5 
@@ -206,7 +219,7 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 		`, whereClause, opts.Limit)
 	} else {
 		searchQuery = fmt.Sprintf(`
-			SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags
 			FROM memories
 			%s
 			ORDER BY priority DESC, accessed_at DESC
@@ -389,6 +402,64 @@ func GetContextMemories(task string, limit int) ([]models.Memory, error) {
 	return final, nil
 }
 
+// PromoteMemory moves a memory from local store to global store
+func PromoteMemory(id string, globalStorePath string) error {
+	// 1. Get memory from local
+	query := fmt.Sprintf("SELECT content, owner_id, category, priority, source, tags FROM memories WHERE id = '%s'", id)
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return err
+	}
+
+	var result struct {
+		Rows []map[string]interface{} `json:"rows"`
+	}
+	json.Unmarshal([]byte(output), &result)
+
+	if len(result.Rows) == 0 {
+		return fmt.Errorf("memory %s not found in local store", id)
+	}
+
+	row := result.Rows[0]
+	content := asString(row["content"])
+	owner := asString(row["owner_id"])
+	category := asString(row["category"])
+	priority := asFloat64(row["priority"])
+	source := asString(row["source"])
+	tagsJSON := asString(row["tags"])
+
+	// Handle tags correctly
+	var tags []string
+	if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+		// If it's not a JSON array string, it might be a raw string from tabular output
+		// But ExecDoltSQLJSON should return JSON. 
+		// Actually, dolt_history sometimes returns comma-separated strings or JSON.
+		// Let's just try to ensure it's valid JSON for the insert.
+	}
+	tagsBytes, _ := json.Marshal(tags)
+	finalTags := string(tagsBytes)
+
+	// 2. Add to global
+	insertQuery := fmt.Sprintf(`
+		INSERT INTO memories (id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags)
+		VALUES ('%s', '%s', '%s', '%s', %f, NOW(), NOW(), 0, '%s', '%s')
+		ON DUPLICATE KEY UPDATE content = VALUES(content), priority = VALUES(priority)
+	`, id, strings.ReplaceAll(content, "'", "''"), owner, category, priority, strings.ReplaceAll(source, "'", "''"), finalTags)
+
+	cmd := exec.Command("dolt", "sql", "-q", insertQuery)
+	cmd.Dir = globalStorePath
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to insert into global store: %w\nOutput: %s", err, string(output))
+	}
+
+	// 3. Commit global
+	commitCmd := exec.Command("dolt", "commit", "-am", fmt.Sprintf("Promoted memory %s from project store", id))
+	commitCmd.Dir = globalStorePath
+	commitCmd.Run() // Ignore "nothing to commit" errors
+
+	return nil
+}
+
 // UpdateMemory updates an existing memory
 func UpdateMemory(params UpdateParams) error {
 	// Build SET clause
@@ -397,6 +468,10 @@ func UpdateMemory(params UpdateParams) error {
 	if params.Content != nil {
 		escapedContent := strings.ReplaceAll(*params.Content, "'", "''")
 		setClauses = append(setClauses, fmt.Sprintf("content = '%s'", escapedContent))
+	}
+
+	if params.OwnerID != nil {
+		setClauses = append(setClauses, fmt.Sprintf("owner_id = '%s'", *params.OwnerID))
 	}
 
 	if params.Category != nil {
@@ -684,6 +759,7 @@ func parseMemoriesJSON(output string) ([]models.Memory, error) {
 		// Parse row values by column name
 		m.ID = asString(row["id"])
 		m.Content = asString(row["content"])
+		m.OwnerID = asString(row["owner_id"])
 		m.Category = models.Category(asString(row["category"]))
 		m.Priority = asFloat64(row["priority"])
 		m.CreatedAt = asTime(row["created_at"])
