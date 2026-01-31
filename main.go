@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.3.0"
+var version = "0.3.1"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -39,6 +39,7 @@ Features:
 	rootCmd.AddCommand(statsCmd())
 	rootCmd.AddCommand(contextCmd())
 	rootCmd.AddCommand(promoteCmd())
+	rootCmd.AddCommand(helpAgentsCmd())
 	rootCmd.AddCommand(deleteCmd())
 	rootCmd.AddCommand(tagsCmd())
 	rootCmd.AddCommand(checkpointCmd())
@@ -846,6 +847,49 @@ func promoteCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	cmd.Flags().StringVar(&globalPath, "path", "/home/hargabyte/.ami/global", "Path to the global AMI store")
 	return cmd
+}
+
+func helpAgentsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "help-agents",
+		Short: "Output agent-optimized command reference",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(`# AMI Command Reference for AI Agents
+
+> This tool manages your long-term memory using a versioned, metabolic architecture.
+> Use it to store facts, decisions, and patterns so you don't burn tokens re-learning them.
+
+## 🧠 Quick Start Workflow
+
+1. **Before a Task**: Get focused context
+   ` + "`" + `ami context "your task description" --limit 5 --robot` + "`" + `
+
+2. **During a Task**: Store important discoveries
+   ` + "`" + `ami add "Decision: use Go 1.22 for this module" --category working --tags technical` + "`" + `
+
+3. **After a Task**: Clean up and promote
+   ` + "`" + `ami promote <memory-id>` + "`" + ` (if it's a permanent team truth)
+
+## 📂 Memory Categories
+
+- **Core**: Foundational truths (User name, identity). Use for facts that NEVER change.
+- **Semantic**: Learned patterns/habits. Use for general knowledge gained over time.
+- **Working**: Task-specific context. Use for notes on the current session.
+- **Episodic**: Event logs. Use for "I did X at time Y".
+
+## 🤖 Robot Mode
+
+ALWAYS use the ` + "`" + `--robot` + "`" + ` flag for programmatic integration. 
+It returns pure JSON to stdout.
+
+## 💡 Best Practices
+
+- **Atomic Memories**: One fact per memory. Don't mix user preferences with technical specs.
+- **Source Attribution**: Always use ` + "`" + `--source` + "`" + ` so future you knows WHY you believe a fact.
+- **Aggressive Tagging**: Use tags for project IDs and concepts to make filtering faster.
+`)
+		},
+	}
 }
 
 func deleteCmd() *cobra.Command {

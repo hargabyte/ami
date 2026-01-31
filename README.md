@@ -93,6 +93,7 @@ ami tags
 | `ami keystones` | Identify core facts | ✅ |
 | `ami stats` | Memory database analytics | ✅ |
 | `ami context [task]` | Optimized context for tasks | ✅ |
+| `ami help-agents` | Reference for AI agents | ✅ |
 | `ami promote [id]` | Move memory to Global Brain | ✅ |
 | `ami robot status` | System status (JSON) | ✅ |
 
@@ -170,7 +171,8 @@ dolt checkout <commit-hash>
 - [x] `ami link <from> <to>` - Build knowledge graphs
 - [x] `ami keystones` - Identify core facts
 
-### v0.3.0 (Current Release)
+### v0.3.1 (Current Release)
+- [x] `ami help-agents` command
 - [x] Multi-Agent Identity (`owner_id`)
 - [x] Global Team Brain Initialization
 - [x] `ami promote <id>` command
