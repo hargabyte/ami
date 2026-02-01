@@ -2,8 +2,8 @@
 
 > Versioned, metabolic memory hierarchy for AI agents, built by agents.
 
-**Version:** 0.4.0
-**Status:** Semantic Intelligence Live ✅
+**Version:** 0.5.0
+**Status:** Decision Support System Live ✅
 
 ---
 
@@ -15,9 +15,9 @@ AMI (Agent Memory Intelligence) is a specialized "sidecar" for AI agents to mana
 
 - **Agent-native**: Built by agents, for agents.
 - **Versioned**: Every memory change is tracked via DoltDB (git-like versioning).
-- **Semantic**: Search by concept and meaning, not just keywords.
+- **Intelligent**: Understands concept and context via Semantic Search and Automatic Packing.
 - **Metabolic**: Memories age and decay naturally unless reinforced (Ebbinghaus curve).
-- **Hierarchical**: Distinguishes between Global Team Knowledge, Project-Specific Context, and Private Agent Habits.
+- **Decision-Driven**: Learns from decision outcomes to prioritize high-value knowledge.
 
 ---
 
@@ -31,35 +31,38 @@ go build -o ami main.go
 
 ### Basic Usage
 
+#### Decision Tracking
+Log your choices and learn from the results.
+```bash
+# Track a decision
+ami decision track "Use Little-Endian for vectors" --task "v0.4.0" --memories "abc,def"
+
+# Record the outcome
+ami decision outcome <id> --outcome 0.9 --feedback "Portability verified"
+```
+
+#### Autonomous Reflection
+Synthesize technical noise into high-signal facts.
+```bash
+ami reflect --hours 24
+```
+
 #### The Intuition Engine (`ami context`)
-The primary interface for agents. Automatically packs the most relevant, high-priority facts into your token budget.
+Automatically pack the most relevant, high-priority facts into your token budget.
 ```bash
 ami context "implement vector search" --tokens 4000 --robot
 ```
 
-#### Semantic Search
-```bash
-# Find memories by concept (requires OPENAI_API_KEY)
-ami recall "data storage" --semantic --limit 5
-```
-
-#### Add a memory
-```bash
-ami add "User prefers concise backend replies" \
-  --category semantic \
-  --owner hsa-gemini \
-  --tags preferences
-```
-
 ---
 
-## 🧠 Semantic Intelligence (v0.4.0)
+## 🧠 Cognitive Architecture (v0.5.0)
 
-AMI v0.4.0 transforms the system into an **Intuition Engine**:
+AMI v0.5.0 transforms the system into a **Decision Support System**:
 
-1.  **Embeddings-Based Search**: Uses OpenAI `text-embedding-3-small` to understand the meaning behind your queries.
-2.  **Hybrid Strategy**: High-accuracy API search with local vector caching for maximum efficiency.
-3.  **Automatic Context Packing**: Intelligently selects `Core` rules first, then fills the remaining token budget with `Semantic` context ranked by relevance and decay.
+1.  **Reinforcement Learning**: Successful decisions automatically increase the priority of linked memories.
+2.  **Autonomous Synthesis**: `ami reflect` clusters task logs and auto-suggests semantic consolidations.
+3.  **Causal Knowledge Graph**: Support for causal links (Fact A → Resulted in → Decision B).
+4.  **Semantic Intuition**: Concept-based search and bit-perfect token packing.
 
 ---
 
@@ -76,29 +79,19 @@ AMI v0.4.0 transforms the system into an **Intuition Engine**:
 | Command | Description | Robot Mode |
 |---------|-------------|-------------|
 | `ami context` | **(North Star)** Optimized context for tasks | ✅ |
+| `ami decision` | Track choices and outcomes | ✅ |
+| `ami reflect` | Synthesize episodic noise | ✅ |
+| `ami help-agents` | Reference guide for AI agents | ✅ |
 | `ami recall` | Search memories (Keyword or --semantic) | ✅ |
 | `ami add` | Add memory with metadata | ✅ |
 | `ami update` | Modify existing memory | ✅ |
 | `ami delete` | Remove a memory by ID | ✅ |
 | `ami promote` | Move memory to Global Brain | ✅ |
-| `ami help-agents` | Reference guide for AI agents | ✅ |
 | `ami history` | Show memory version history | ✅ |
 | `ami rollback` | Revert memory to version | ✅ |
-| `ami link` | Build knowledge graphs | ✅ |
+| `ami link` | Build knowledge graphs (Causal support) | ✅ |
 | `ami keystones` | Identify core truths | ✅ |
 | `ami stats` | Memory distribution analytics | ✅ |
-
----
-
-## 🧠 Metabolic Decay
-
-Memories follow a logarithmic "forgetting curve":
-`Score = (Priority * (AccessCount + 1)) / (log10(TimeDelta + 10) * CategoryDecay)`
-
-### Decay Factors:
-- **Core**: 0.5 (Nearly permanent)
-- **Semantic**: 1.0 (Standard facts)
-- **Episodic/Working**: 2.0 (Fast fade for logs/noise)
 
 ---
 
@@ -107,7 +100,7 @@ Memories follow a logarithmic "forgetting curve":
 | Agent | Emoji | Role |
 |-------|-------|------|
 | **HSA_Claude** | 🏛️ | Tech Lead & Architecture |
-| **HSA_Gemini** | 🧠 | Research & Semantic Implementation |
+| **HSA_Gemini** | 🧠 | Research & Decision Logic |
 | **HSA_GLM** | 🎨 | Implementation & CLI |
 
 **Built by the HSA Team for @hargabyte.** 🚀
