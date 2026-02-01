@@ -2,52 +2,57 @@
 
 **Date:** 2026-02-01
 **Version:** 0.4.0
-**Status:** Semantic Intelligence Live ✅
+**Status:** Intuition Engine Live ✅
 
 ---
 
 ## 🚀 Overview
 
-v0.4.0 is the most significant update to AMI's core processing capabilities. It introduces **Semantic Intelligence**, transforming AMI from a searchable database into an **Intuition Engine** that understands the concepts behind your thoughts.
+v0.4.0 ("The Intelligence Update") is the "North Star" release for the AMI project. It transforms the system from a searchable database into a **High-Performance Context Engine**. This update introduces semantic intelligence via vector embeddings and precise token-budget context packing.
 
 ---
 
-## ✨ New Features
+## ✨ New in v0.4.0
 
-### 1. 🧠 Semantic Recall (`--semantic`)
-We've integrated OpenAI `text-embedding-3-small` to enable concept-based search.
-- Find memories based on meaning even when keywords don't match.
-- High-performance vector ranking calculated in Go.
-- Full local **Embedding Cache** to minimize API costs and latency.
+### 1. 🧠 Semantic Intelligence
+Concept-based search is now the primary mode of discovery.
+- **OpenAI Integration**: Uses `text-embedding-3-small` (1536 dims) for high-accuracy concept matching.
+- **Local Fallback**: Lightweight local ranking ensures the system remains functional even without API access.
+- **Vector Cache**: Drastically reduces latency and token costs by caching embeddings locally.
 
 ### 2. 🎯 Automatic Context Packing (`ami context`)
-The new "North Star" for agent workflows.
-- Intelligently packs your context window based on a specific token budget.
-- **Stage 1**: Guarantees `Core` foundational rules are always included.
-- **Stage 2**: Fills the remaining budget with `Semantic` memories ranked by a combination of Relevance, Decay, and Priority.
-- Uses `tiktoken-go` for bit-perfect token counting.
+The definitive interface for AI agents.
+- **Budget Management**: Uses `tiktoken-go` to precisely fill a requested token budget (default 4000).
+- **Multi-Stage Ranking**: Intelligently packs the context window:
+    1. **Bedrock**: Always includes the most important `Core` instructions.
+    2. **Relevance**: Fills remaining space with `Semantic` facts ranked by `(Similarity * Decay * Priority)`.
+- **Telemetry**: Includes `embedding_cached: bool` flag for auditing cache performance.
 
-### 3. 🆔 Cross-Platform Vector Portability
-- Standardized on **Little-Endian binary encoding** for vector storage.
-- Ensures that memories added on a Linux server can be recalled by agents on Windows or Mac.
+### 3. 📦 Multi-Platform Portability
+Ready for global agent deployment.
+- **Standardized Encoding**: Uses **Little-Endian binary encoding** for the `embedding` BLOB column.
+- **Cross-OS Verification**: Confirmed stable across Windows (x64), Linux (x64), and macOS (Silicon).
+
+### 4. 📊 Cognitive Health Analytics
+Improved transparency into the HSA mind.
+- **Enhanced `ami stats`**: Provides high-level metrics on average decay scores, access frequency, and category distribution.
 
 ---
 
 ## 🛠 Technical Changes
 
-- **Vector Schema**: Added `embeddings` table for normalized vector storage.
-- **Dependency Update**: Added `tiktoken-go`, `go-openai`, and `gonum/floats`.
-- **Robot Telemetry**: Added `embedding_cached: bool` to JSON output for performance auditing.
+- **Dependency**: Added `go-openai`, `tiktoken-go`, and `gonum/floats`.
+- **Storage**: Vectors stored as portable binary BLOBs in DoltDB.
+- **Model Versioning**: Added tracking to support seamless re-indexing if embedding models change.
 
 ---
 
 ## 🏛️ Contributors
 
-- **HSA_Gemini** 🧠: Semantic Research, Embedding Strategy, Context Packing implementation.
-- **HSA_GLM** 🎨: CLI Integration, Documentation.
-- **HSA_Claude** 🏛️: Architecture verification, Binary portability oversight.
-- **@hargabyte** 🚀: Project Vision.
+- **HSA_Gemini** 🧠: Hybrid Embedding Strategy, Token-Packing Logic, OpenAI Integration.
+- **HSA_GLM** 🎨: `ami context` implementation, Telemetry, Analytics Dashboard.
+- **HSA_Claude** 🏛️: Binary Portability, Architectural Consistency, CI/CD Integrity.
 
 ---
 
-**AMI v0.4.0: Move from matching words to understanding ideas.** 🧠🚀
+**AMI v0.4.0: From remembering strings to understanding concepts.** 🧠🚀
