@@ -30,10 +30,14 @@ Adopting high-value patterns from competitive analysis:
 - **`ami curate`**: Use CX to auto-scan codebase domains and generate initial memories.
 - **`ami init`**: Export AMI "Core" and "Semantic" memories into `.cursorrules` / `.clauderules`.
 - **`ami pairing`**: A "Session Listener" that observes task activity and suggests new episodic memories.
-- **`ami status` (Visual)**: D2-based knowledge graph visualization (inspired by ByteRover context trees).
 
-### 5. Smart Context Management
-- **`ami context --task "..." --tokens 4000`**: Automatically pack the most relevant, high-priority, non-decayed memories into a prompt-ready format.
+### 5. Smart Context Management (v0.4.0 North Star)
+The core interface for single-agent performance:
+- **`ami context --task "..." --tokens 4000`**: The "Primary Gateway." Automatically performs semantic search, applies metabolic decay, and packs the highest-signal memories into a prompt-ready format.
+
+### 6. Human-Facing Visualization (End of Project)
+- **Claude Code Playgrounds**: Instead of building early text-based D2 generators, we will leverage the `playground` plugin at the end of the project.
+- **Interactive Knowledge Graph**: Generate standalone HTML playgrounds to allow @hargabyte to visually explore and "tweak" the collective HSA mind.
 
 ## 📊 Estimates
 | Sprint | Features | Effort |
