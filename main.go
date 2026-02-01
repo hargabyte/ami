@@ -75,6 +75,7 @@ func addCmd() *cobra.Command {
 	var priority float64
 	var tags []string
 	var source string
+	var teamID string
 	var robotMode bool
 
 	cmd := &cobra.Command{
@@ -133,7 +134,7 @@ func addCmd() *cobra.Command {
 			}
 
 			// Add the memory
-			memory, err := store.AddMemory(content, ownerID, cat, priority, tags, source)
+			memory, err := store.AddMemory(content, ownerID, cat, priority, tags, source, teamID)
 			if err != nil {
 				if robotMode {
 					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
@@ -160,6 +161,7 @@ func addCmd() *cobra.Command {
 	cmd.Flags().Float64Var(&priority, "priority", 0.5, "Priority (0.0-1.0)")
 	cmd.Flags().StringSliceVar(&tags, "tags", []string{}, "Tags for the memory")
 	cmd.Flags().StringVar(&source, "source", "", "Source of the memory (optional)")
+	cmd.Flags().StringVar(&teamID, "team", "system", "Mattermost Team ID (optional)")
 	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	return cmd
 }
@@ -286,6 +288,7 @@ func recallCmd() *cobra.Command {
 	var tagsFilter []string
 	var categoryFilter string
 	var ownerFilter string
+	var teamFilter string
 	var withDecay bool
 	var semanticSearch bool
 
@@ -327,6 +330,7 @@ func recallCmd() *cobra.Command {
 				Tags:       tagsFilter,
 				Category:   categoryFilter,
 				OwnerID:    ownerFilter,
+				TeamID:     teamFilter,
 				WithDecay:  withDecay,
 				Semantic:   semanticSearch,
 			}
@@ -347,7 +351,7 @@ func recallCmd() *cobra.Command {
 				result := map[string]interface{}{
 					"status":   "ok",
 					"query":    query,
-					"filters":  map[string]interface{}{"tags": tagsFilter, "category": categoryFilter, "owner": ownerFilter},
+					"filters":  map[string]interface{}{"tags": tagsFilter, "category": categoryFilter, "owner": ownerFilter, "team": teamFilter},
 					"count":    len(memories),
 					"memories": memories,
 				}
@@ -374,6 +378,12 @@ func recallCmd() *cobra.Command {
 						filterDesc += " and "
 					}
 					filterDesc += fmt.Sprintf("in category: %s", categoryFilter)
+				}
+				if teamFilter != "" {
+					if filterDesc != "" {
+						filterDesc += " and "
+					}
+					filterDesc += fmt.Sprintf("from team: %s", teamFilter)
 				}
 				if filterDesc == "" {
 					filterDesc = "(all memories)"
@@ -402,6 +412,7 @@ func recallCmd() *cobra.Command {
 	cmd.Flags().StringSliceVar(&tagsFilter, "tags", []string{}, "Filter by tags (all tags must match)")
 	cmd.Flags().StringVar(&categoryFilter, "category", "", "Filter by category (core|semantic|working|episodic)")
 	cmd.Flags().StringVar(&ownerFilter, "owner", "", "Filter by memory owner")
+	cmd.Flags().StringVar(&teamFilter, "team", "", "Filter by Mattermost Team ID")
 	cmd.Flags().BoolVar(&withDecay, "decay", false, "Use decay-weighted scoring for recall")
 	cmd.Flags().BoolVar(&semanticSearch, "semantic", false, "Use embeddings-based semantic search")
 	return cmd
@@ -1530,6 +1541,121 @@ This helps maintain team consensus across multiple agents.`,
 	return cmd
 }
 
+func pairingCmd() *cobra.Command {
+	var taskID string
+
+	cmd := &cobra.Command{
+		Use:   "pairing",
+		Short: "Manage session pairing daemon",
+	}
+
+	startCmd := &cobra.Command{
+		Use:   "start",
+		Short: "Start the pairing daemon",
+		Run: func(cmd *cobra.Command, args []string) {
+			socketPath := store.GetSocketPath()
+			
+			// Cleanup old socket
+			os.Remove(socketPath)
+
+			listener, err := net.Listen("unix", socketPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error starting pairing daemon: %v\n", err)
+				os.Exit(1)
+			}
+			defer listener.Close()
+
+			fmt.Printf("✓ Pairing daemon started at %s (Task: %s)\n", socketPath, taskID)
+			fmt.Println("Listening for tool reports...")
+
+			for {
+				conn, err := listener.Accept()
+				if err != nil {
+					continue
+				}
+				
+				go func(c net.Conn) {
+					defer c.Close()
+					var action store.PairingAction
+					if err := json.NewDecoder(c).Decode(&action); err == nil {
+						fmt.Printf(" [LOG] Tool: %s | Action: %s\n", action.Source, action.Action)
+						// In a real impl, we'd write to a draft branch in Dolt here
+					}
+				}(conn)
+			}
+		},
+	}
+	startCmd.Flags().StringVar(&taskID, "task", "default", "Task ID to associate with the session")
+
+	cmd.AddCommand(startCmd)
+	return cmd
+}
+
+func syncCmd() *cobra.Command {
+	var channelID string
+	var limit int
+	var teamID string
+
+	cmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Synchronize memories from external sources",
+	}
+
+	mmCmd := &cobra.Command{
+		Use:   "mattermost",
+		Short: "Sync memories from Mattermost channel",
+		Run: func(cmd *cobra.Command, args []string) {
+			token := os.Getenv("MATTERMOST_TOKEN")
+			url := os.Getenv("MATTERMOST_URL")
+			
+			if token == "" || url == "" {
+				fmt.Fprintln(os.Stderr, "Error: MATTERMOST_TOKEN and MATTERMOST_URL must be set")
+				os.Exit(1)
+			}
+
+			client := db.NewMattermostClient(url, token)
+			messages, err := client.GetRecentMessages(channelID, limit)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error fetching messages: %v\n", err)
+				os.Exit(1)
+			}
+
+			fmt.Printf("✓ Pulled %d messages from Mattermost. Processing via Ollama...\n", len(messages))
+			
+			// Process through reflection engine (Ollama)
+			ctx := context.Background()
+			ollama := db.NewOllamaClient("http://localhost:11434", "qwen2.5-coder:1.5b")
+			
+			rawContent := strings.Join(messages, "\n---\n")
+			facts, err := store.ExtractTechnicalFacts(ctx, ollama, rawContent)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error extracting facts: %v\n", err)
+				os.Exit(1)
+			}
+
+			fmt.Printf("✓ Extracted %d potential facts for review (Team: %s):\n", len(facts), teamID)
+			
+			// Initialize database
+			repoPath, _ := os.Getwd()
+			db.InitDB(repoPath)
+			defer db.CloseDB()
+
+			for _, f := range facts {
+				// Add as under_review with team attribution
+				store.AddMemory(f, "system", models.CategorySemantic, 0.5, []string{"mm-sync"}, "mattermost", teamID)
+				fmt.Printf("- %s\n", f)
+			}
+		},
+	}
+	mmCmd.Flags().StringVar(&channelID, "channel", "", "Mattermost Channel ID")
+	mmCmd.Flags().IntVar(&limit, "limit", 20, "Number of messages to pull")
+	mmCmd.Flags().StringVar(&teamID, "team", "system", "Mattermost Team ID for attribution")
+	mmCmd.MarkFlagRequired("channel")
+
+	cmd.AddCommand(mmCmd)
+	return cmd
+}
+
 func robotCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "robot",
@@ -1596,110 +1722,5 @@ func robotCmd() *cobra.Command {
 		},
 	})
 
-	return cmd
-}
-
-func pairingCmd() *cobra.Command {
-	var taskID string
-
-	cmd := &cobra.Command{
-		Use:   "pairing",
-		Short: "Manage session pairing daemon",
-	}
-
-	startCmd := &cobra.Command{
-		Use:   "start",
-		Short: "Start the pairing daemon",
-		Run: func(cmd *cobra.Command, args []string) {
-			socketPath := store.GetSocketPath()
-			
-			// Cleanup old socket
-			os.Remove(socketPath)
-
-			listener, err := net.Listen("unix", socketPath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error starting pairing daemon: %v\n", err)
-				os.Exit(1)
-			}
-			defer listener.Close()
-
-			fmt.Printf("✓ Pairing daemon started at %s (Task: %s)\n", socketPath, taskID)
-			fmt.Println("Listening for tool reports...")
-
-			for {
-				conn, err := listener.Accept()
-				if err != nil {
-					continue
-				}
-				
-				go func(c net.Conn) {
-					defer c.Close()
-					var action store.PairingAction
-					if err := json.NewDecoder(c).Decode(&action); err == nil {
-						fmt.Printf(" [LOG] Tool: %s | Action: %s\n", action.Source, action.Action)
-						// In a real impl, we'd write to a draft branch in Dolt here
-					}
-				}(conn)
-			}
-		},
-	}
-	startCmd.Flags().StringVar(&taskID, "task", "default", "Task ID to associate with the session")
-
-	cmd.AddCommand(startCmd)
-	return cmd
-}
-
-func syncCmd() *cobra.Command {
-	var channelID string
-	var limit int
-
-	cmd := &cobra.Command{
-		Use:   "sync",
-		Short: "Synchronize memories from external sources",
-	}
-
-	mmCmd := &cobra.Command{
-		Use:   "mattermost",
-		Short: "Sync memories from Mattermost channel",
-		Run: func(cmd *cobra.Command, args []string) {
-			token := os.Getenv("MATTERMOST_TOKEN")
-			url := os.Getenv("MATTERMOST_URL")
-			
-			if token == "" || url == "" {
-				fmt.Fprintln(os.Stderr, "Error: MATTERMOST_TOKEN and MATTERMOST_URL must be set")
-				os.Exit(1)
-			}
-
-			client := db.NewMattermostClient(url, token)
-			messages, err := client.GetRecentMessages(channelID, limit)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error fetching messages: %v\n", err)
-				os.Exit(1)
-			}
-
-			fmt.Printf("✓ Pulled %d messages from Mattermost. Processing via Ollama...\n", len(messages))
-			
-			// Process through reflection engine (Ollama)
-			ctx := context.Background()
-			ollama := db.NewOllamaClient("http://localhost:11434", "qwen2.5-coder:1.5b")
-			
-			rawContent := strings.Join(messages, "\n---\n")
-			facts, err := store.ExtractTechnicalFacts(ctx, ollama, rawContent)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error extracting facts: %v\n", err)
-				os.Exit(1)
-			}
-
-			fmt.Printf("✓ Extracted %d potential facts for review:\n", len(facts))
-			for _, f := range facts {
-				fmt.Printf("- %s\n", f)
-			}
-		},
-	}
-	mmCmd.Flags().StringVar(&channelID, "channel", "", "Mattermost Channel ID")
-	mmCmd.Flags().IntVar(&limit, "limit", 20, "Number of messages to pull")
-	mmCmd.MarkFlagRequired("channel")
-
-	cmd.AddCommand(mmCmd)
 	return cmd
 }

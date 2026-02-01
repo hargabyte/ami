@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS memories (
     source VARCHAR(255),
     tags JSON,
     embedding BLOB,
-    status ENUM('verified', 'under_review', 'deprecated') DEFAULT 'verified'
+    status ENUM('verified', 'under_review', 'deprecated') DEFAULT 'verified',
+    team_id VARCHAR(255) DEFAULT 'system'
 );
 
 CREATE TABLE IF NOT EXISTS memory_links (

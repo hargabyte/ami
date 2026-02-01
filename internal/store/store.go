@@ -34,6 +34,7 @@ type RecallOptions struct {
 	Tags       []string
 	Category   string
 	OwnerID    string
+	TeamID     string
 	WithDecay  bool
 	Semantic   bool
 }
@@ -73,7 +74,7 @@ func ExecDoltSQLJSON(query string) (string, error) {
 }
 
 // AddMemory adds a new memory to the database and creates a Dolt commit
-func AddMemory(content string, ownerID string, category models.Category, priority float64, tags []string, source string) (*models.Memory, error) {
+func AddMemory(content string, ownerID string, category models.Category, priority float64, tags []string, source string, teamID string) (*models.Memory, error) {
 	// Generate UUID
 	id := uuid.New().String()
 	now := time.Now().Format("2006-01-02 15:04:05")
@@ -81,6 +82,11 @@ func AddMemory(content string, ownerID string, category models.Category, priorit
 	// Set default owner if empty
 	if ownerID == "" {
 		ownerID = "system"
+	}
+
+	// Set default team if empty
+	if teamID == "" {
+		teamID = "system"
 	}
 
 	// Convert tags to JSON for SQL
@@ -105,9 +111,9 @@ func AddMemory(content string, ownerID string, category models.Category, priorit
 
 	// 2. Insert memory using dolt CLI
 	query := fmt.Sprintf(`
-		INSERT INTO memories (id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, embedding)
-		VALUES ('%s', '%s', '%s', '%s', %f, '%s', '%s', 0, '%s', '%s', %s)
-	`, id, escapedContent, ownerID, string(category), priority, now, now, escapedSource, string(tagsJSON), embeddingHex)
+		INSERT INTO memories (id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, embedding, team_id)
+		VALUES ('%s', '%s', '%s', '%s', %f, '%s', '%s', 0, '%s', '%s', %s, '%s')
+	`, id, escapedContent, ownerID, string(category), priority, now, now, escapedSource, string(tagsJSON), embeddingHex, teamID)
 
 	_, err = db.ExecDoltSQL(query)
 	if err != nil {
@@ -139,6 +145,7 @@ func AddMemory(content string, ownerID string, category models.Category, priorit
 		AccessCount: 0,
 		Source:      source,
 		Tags:        models.Tags(tags),
+		TeamID:      teamID,
 	}, nil
 }
 
@@ -201,6 +208,11 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 	// Owner filter
 	if opts.OwnerID != "" {
 		whereClauses = append(whereClauses, fmt.Sprintf("owner_id = '%s'", opts.OwnerID))
+	}
+
+	// Team filter
+	if opts.TeamID != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("team_id = '%s'", opts.TeamID))
 	}
 
 	// Tags filter - check JSON_CONTAINS
@@ -908,6 +920,7 @@ func parseMemoriesJSON(output string) ([]models.Memory, error) {
 		m.Source = asString(row["source"])
 		m.EmbeddingCached = asInt(row["embedding_cached"]) == 1
 		m.Status = models.Status(asString(row["status"]))
+		m.TeamID = asString(row["team_id"])
 
 		// Parse embedding if present
 		if row["embedding"] != nil {

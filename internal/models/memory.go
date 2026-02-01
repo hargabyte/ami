@@ -85,4 +85,5 @@ type Memory struct {
 	Embedding       []float32  `json:"embedding,omitempty"`
 	EmbeddingCached bool       `json:"embedding_cached"`
 	Status          Status     `json:"status,omitempty"`
+	TeamID          string     `json:"team_id,omitempty"`
 }
