@@ -36,7 +36,11 @@ v0.5.0+ includes a GitHub Actions workflow that automatically builds binaries fo
 - Windows (amd64)
 - macOS (arm64 & amd64)
 
-### Basic Usage
+### Multi-Platform Support
+AMI is built in Go and runs on **Linux, macOS, and Windows**.
+*   **Binaries**: Automatically built via GitHub Actions for every release.
+*   **Datastore**: DoltDB provides cross-platform versioned storage.
+*   **Caveat**: `ami pairing` currently uses Unix Sockets and is supported on Linux and macOS. Windows Named Pipe support is coming in v0.7.1.
 
 #### Decision Tracking
 Log your choices and learn from the results.
