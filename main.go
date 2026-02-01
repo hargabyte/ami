@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -13,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.6.0"
+var version = "0.7.0"
 
 // confirmAction asks for user confirmation
 func confirmAction(prompt string) bool {
@@ -48,6 +50,7 @@ Features:
 	rootCmd.AddCommand(keystonesCmd())
 	rootCmd.AddCommand(statsCmd())
 	rootCmd.AddCommand(contextCmd())
+	rootCmd.AddCommand(syncCmd())
 	rootCmd.AddCommand(promoteCmd())
 	rootCmd.AddCommand(helpAgentsCmd())
 	rootCmd.AddCommand(deleteCmd())
@@ -57,6 +60,7 @@ Features:
 	rootCmd.AddCommand(decisionCmd())
 	rootCmd.AddCommand(reflectCmd())
 	rootCmd.AddCommand(conflictCmd())
+	rootCmd.AddCommand(pairingCmd())
 	rootCmd.AddCommand(robotCmd())
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1592,5 +1596,110 @@ func robotCmd() *cobra.Command {
 		},
 	})
 
+	return cmd
+}
+
+func pairingCmd() *cobra.Command {
+	var taskID string
+
+	cmd := &cobra.Command{
+		Use:   "pairing",
+		Short: "Manage session pairing daemon",
+	}
+
+	startCmd := &cobra.Command{
+		Use:   "start",
+		Short: "Start the pairing daemon",
+		Run: func(cmd *cobra.Command, args []string) {
+			socketPath := store.GetSocketPath()
+			
+			// Cleanup old socket
+			os.Remove(socketPath)
+
+			listener, err := net.Listen("unix", socketPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error starting pairing daemon: %v\n", err)
+				os.Exit(1)
+			}
+			defer listener.Close()
+
+			fmt.Printf("✓ Pairing daemon started at %s (Task: %s)\n", socketPath, taskID)
+			fmt.Println("Listening for tool reports...")
+
+			for {
+				conn, err := listener.Accept()
+				if err != nil {
+					continue
+				}
+				
+				go func(c net.Conn) {
+					defer c.Close()
+					var action store.PairingAction
+					if err := json.NewDecoder(c).Decode(&action); err == nil {
+						fmt.Printf(" [LOG] Tool: %s | Action: %s\n", action.Source, action.Action)
+						// In a real impl, we'd write to a draft branch in Dolt here
+					}
+				}(conn)
+			}
+		},
+	}
+	startCmd.Flags().StringVar(&taskID, "task", "default", "Task ID to associate with the session")
+
+	cmd.AddCommand(startCmd)
+	return cmd
+}
+
+func syncCmd() *cobra.Command {
+	var channelID string
+	var limit int
+
+	cmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Synchronize memories from external sources",
+	}
+
+	mmCmd := &cobra.Command{
+		Use:   "mattermost",
+		Short: "Sync memories from Mattermost channel",
+		Run: func(cmd *cobra.Command, args []string) {
+			token := os.Getenv("MATTERMOST_TOKEN")
+			url := os.Getenv("MATTERMOST_URL")
+			
+			if token == "" || url == "" {
+				fmt.Fprintln(os.Stderr, "Error: MATTERMOST_TOKEN and MATTERMOST_URL must be set")
+				os.Exit(1)
+			}
+
+			client := db.NewMattermostClient(url, token)
+			messages, err := client.GetRecentMessages(channelID, limit)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error fetching messages: %v\n", err)
+				os.Exit(1)
+			}
+
+			fmt.Printf("✓ Pulled %d messages from Mattermost. Processing via Ollama...\n", len(messages))
+			
+			// Process through reflection engine (Ollama)
+			ctx := context.Background()
+			ollama := db.NewOllamaClient("http://localhost:11434", "qwen2.5-coder:1.5b")
+			
+			rawContent := strings.Join(messages, "\n---\n")
+			facts, err := store.ExtractTechnicalFacts(ctx, ollama, rawContent)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error extracting facts: %v\n", err)
+				os.Exit(1)
+			}
+
+			fmt.Printf("✓ Extracted %d potential facts for review:\n", len(facts))
+			for _, f := range facts {
+				fmt.Printf("- %s\n", f)
+			}
+		},
+	}
+	mmCmd.Flags().StringVar(&channelID, "channel", "", "Mattermost Channel ID")
+	mmCmd.Flags().IntVar(&limit, "limit", 20, "Number of messages to pull")
+	mmCmd.MarkFlagRequired("channel")
+
+	cmd.AddCommand(mmCmd)
 	return cmd
 }
