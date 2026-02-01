@@ -163,7 +163,7 @@ func CatchupMemories(opts CatchupOptions) ([]models.Memory, error) {
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags
+		SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags, status
 		FROM memories
 		%s
 		ORDER BY created_at DESC
@@ -222,7 +222,7 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 	if opts.Semantic {
 		// Fetch all memories with embeddings for in-memory ranking
 		searchQuery = fmt.Sprintf(`
-			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, embedding, embedding_cached
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, embedding, embedding_cached, status
 			FROM memories
 			%s
 		`, whereClause)
@@ -230,13 +230,13 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 		// Use logarithmic decay scoring:
 		// Score = (Priority * (AccessCount + 1)) / (log10(TimeDelta + 10) * CategoryDecay)
 		searchQuery = fmt.Sprintf(`
-			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags,
-			(priority * (access_count + 1)) / (LOG10(TIMESTAMPDIFF(SECOND, accessed_at, NOW()) + 10) * 
-			CASE 
-				WHEN category = 'core' THEN 0.5 
-				WHEN category = 'semantic' THEN 1.0 
-				WHEN category = 'episodic' THEN 2.0 
-				ELSE 1.5 
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status,
+			(priority * (access_count + 1)) / (LOG10(TIMESTAMPDIFF(SECOND, accessed_at, NOW()) + 10) *
+			CASE
+				WHEN category = 'core' THEN 0.5
+				WHEN category = 'semantic' THEN 1.0
+				WHEN category = 'episodic' THEN 2.0
+				ELSE 1.5
 			END) as recall_score
 			FROM memories
 			%s

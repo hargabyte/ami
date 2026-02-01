@@ -27,6 +27,25 @@ func (c Category) IsValid() bool {
 	}
 }
 
+// Status represents the verification status of a memory
+type Status string
+
+const (
+	StatusVerified     Status = "verified"
+	StatusUnderReview Status = "under_review"
+	StatusDeprecated  Status = "deprecated"
+)
+
+// IsValid checks if the status is valid
+func (s Status) IsValid() bool {
+	switch s {
+	case StatusVerified, StatusUnderReview, StatusDeprecated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Tags is a JSON-able slice of strings
 type Tags []string
 
@@ -65,4 +84,5 @@ type Memory struct {
 	Tags            Tags       `json:"tags,omitempty"`
 	Embedding       []float32  `json:"embedding,omitempty"`
 	EmbeddingCached bool       `json:"embedding_cached"`
+	Status          Status     `json:"status,omitempty"`
 }
