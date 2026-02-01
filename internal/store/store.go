@@ -245,7 +245,7 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 		`, whereClause, opts.Limit)
 	} else {
 		searchQuery = fmt.Sprintf(`
-			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status
 			FROM memories
 			%s
 			ORDER BY priority DESC, accessed_at DESC
