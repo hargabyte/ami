@@ -1,16 +1,23 @@
 package store
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hargabyte/ami/internal/db"
 	"github.com/hargabyte/ami/internal/models"
+	"github.com/pkoukk/tiktoken-go"
+	"github.com/sashabaranov/go-openai"
 )
 
 // CatchupOptions specifies filters for memory catchup
@@ -86,11 +93,21 @@ func AddMemory(content string, ownerID string, category models.Category, priorit
 	escapedContent := strings.ReplaceAll(content, "'", "''")
 	escapedSource := strings.ReplaceAll(source, "'", "''")
 
-	// Insert memory using dolt CLI
+	// 1. Calculate embedding if enabled (v0.4.0)
+	embeddingHex := "NULL"
+	if os.Getenv("OPENAI_API_KEY") != "" {
+		vector, err := GetEmbedding(content)
+		if err == nil {
+			binaryData := Float32ToBinary(vector)
+			embeddingHex = fmt.Sprintf("X'%x'", binaryData)
+		}
+	}
+
+	// 2. Insert memory using dolt CLI
 	query := fmt.Sprintf(`
-		INSERT INTO memories (id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags)
-		VALUES ('%s', '%s', '%s', '%s', %f, '%s', '%s', 0, '%s', '%s')
-	`, id, escapedContent, ownerID, string(category), priority, now, now, escapedSource, string(tagsJSON))
+		INSERT INTO memories (id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, embedding)
+		VALUES ('%s', '%s', '%s', '%s', %f, '%s', '%s', 0, '%s', '%s', %s)
+	`, id, escapedContent, ownerID, string(category), priority, now, now, escapedSource, string(tagsJSON), embeddingHex)
 
 	_, err = db.ExecDoltSQL(query)
 	if err != nil {
@@ -163,8 +180,9 @@ func CatchupMemories(opts CatchupOptions) ([]models.Memory, error) {
 
 // RecallMemories performs a basic text search on memories with optional filters
 func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
-	// Build WHERE clause
+	// 1. Build WHERE clause
 	whereClauses := []string{}
+	// ... (rest of where clause building)
 
 	// Text search
 	if opts.Query != "" {
@@ -201,7 +219,14 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 
 	// Build query
 	var searchQuery string
-	if opts.WithDecay {
+	if opts.Semantic {
+		// Fetch all memories with embeddings for in-memory ranking
+		searchQuery = fmt.Sprintf(`
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, embedding, embedding_cached
+			FROM memories
+			%s
+		`, whereClause)
+	} else if opts.WithDecay {
 		// Use logarithmic decay scoring:
 		// Score = (Priority * (AccessCount + 1)) / (log10(TimeDelta + 10) * CategoryDecay)
 		searchQuery = fmt.Sprintf(`
@@ -237,6 +262,39 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 	memories, err := parseMemoriesJSON(output)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse memories: %w", err)
+	}
+
+	if opts.Semantic && opts.Query != "" {
+		// 1. Get embedding for the query
+		queryVector, err := GetEmbedding(opts.Query)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get query embedding: %w", err)
+		}
+
+		// 2. Rank memories by similarity
+		type memoryWithScore struct {
+			models.Memory
+			score float32
+		}
+		var ranked []memoryWithScore
+		for _, m := range memories {
+			if len(m.Embedding) > 0 {
+				score := CosineSimilarity(queryVector, m.Embedding)
+				ranked = append(ranked, memoryWithScore{m, score})
+			}
+		}
+
+		// Sort by score
+		sort.Slice(ranked, func(i, j int) bool {
+			return ranked[i].score > ranked[j].score
+		})
+
+		// Convert back to []models.Memory and apply limit
+		finalMemories := make([]models.Memory, 0, len(ranked))
+		for i := 0; i < len(ranked) && i < opts.Limit; i++ {
+			finalMemories = append(finalMemories, ranked[i].Memory)
+		}
+		return finalMemories, nil
 	}
 
 	return memories, nil
@@ -365,38 +423,66 @@ func GetKeystoneMemories(limit int) ([]models.Memory, error) {
 	return parseMemoriesJSON(output)
 }
 
+// CountTokens counts tokens in a string
+func CountTokens(text string) int {
+	// Initialize tiktoken for Claude/GPT-4 encoding
+	encoding := "cl100k_base"
+	tke, err := tiktoken.GetEncoding(encoding)
+	if err != nil {
+		// Fallback to rough estimate: 1 token ~= 4 chars or 0.75 words
+		return len(text) / 4
+	}
+	token := tke.Encode(text, nil, nil)
+	return len(token)
+}
+
 // GetContextMemories returns memories optimized for prompt context
-func GetContextMemories(task string, limit int) ([]models.Memory, error) {
-	// First, get high-priority core facts
+func GetContextMemories(task string, limit int, tokenBudget int) ([]models.Memory, error) {
+	// 1. Get high-priority core facts first
 	coreOpts := RecallOptions{
 		Category: "core",
-		Limit:    5,
+		Limit:    10,
 	}
 	coreMemories, _ := RecallMemories(coreOpts)
 
-	// Second, get task-relevant memories with decay
-	taskOpts := RecallOptions{
-		Query:     task,
-		Limit:     limit,
-		WithDecay: true,
+	// 2. Get task-relevant memories with semantic search if task is provided
+	var taskMemories []models.Memory
+	if task != "" {
+		taskOpts := RecallOptions{
+			Query:     task,
+			Limit:     limit,
+			WithDecay: true,
+			Semantic:  true,
+		}
+		taskMemories, _ = RecallMemories(taskOpts)
 	}
-	taskMemories, _ := RecallMemories(taskOpts)
 
-	// Combine and deduplicate
+	// 3. Pack memories into the budget
 	seen := make(map[string]bool)
 	var final []models.Memory
+	currentTokens := 0
 
+	// Pack Core first
 	for _, m := range coreMemories {
 		if !seen[m.ID] {
-			final = append(final, m)
-			seen[m.ID] = true
+			tokens := CountTokens(m.Content)
+			if currentTokens+tokens <= tokenBudget {
+				final = append(final, m)
+				seen[m.ID] = true
+				currentTokens += tokens
+			}
 		}
 	}
 
+	// Pack Semantic/Task context
 	for _, m := range taskMemories {
 		if !seen[m.ID] {
-			final = append(final, m)
-			seen[m.ID] = true
+			tokens := CountTokens(m.Content)
+			if currentTokens+tokens <= tokenBudget {
+				final = append(final, m)
+				seen[m.ID] = true
+				currentTokens += tokens
+			}
 		}
 	}
 
@@ -459,6 +545,59 @@ func PromoteMemory(id string, globalStorePath string) error {
 	commitCmd.Run() // Ignore "nothing to commit" errors
 
 	return nil
+}
+
+// BinaryToFloat32 converts a binary BLOB to []float32
+func BinaryToFloat32(data []byte) []float32 {
+	floats := make([]float32, len(data)/4)
+	for i := 0; i < len(floats); i++ {
+		bits := binary.LittleEndian.Uint32(data[i*4 : (i+1)*4])
+		floats[i] = math.Float32frombits(bits)
+	}
+	return floats
+}
+
+// Float32ToBinary converts []float32 to a binary BLOB
+func Float32ToBinary(floats []float32) []byte {
+	data := make([]byte, len(floats)*4)
+	for i, f := range floats {
+		binary.LittleEndian.PutUint32(data[i*4:(i+1)*4], math.Float32bits(f))
+	}
+	return data
+}
+
+// GetEmbedding fetches the embedding vector for a string using OpenAI
+func GetEmbedding(text string) ([]float32, error) {
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		return nil, fmt.Errorf("OPENAI_API_KEY not set")
+	}
+
+	client := openai.NewClient(apiKey)
+	resp, err := client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+		Input: []string{text},
+		Model: openai.SmallEmbedding3,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Data[0].Embedding, nil
+}
+
+// CosineSimilarity calculates the similarity between two vectors
+func CosineSimilarity(a, b []float32) float32 {
+	var dotProduct float32
+	var normA, normB float32
+	for i := range a {
+		dotProduct += a[i] * b[i]
+		normA += a[i] * a[i]
+		normB += b[i] * b[i]
+	}
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+	return dotProduct / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
 }
 
 // UpdateMemory updates an existing memory
@@ -767,6 +906,15 @@ func parseMemoriesJSON(output string) ([]models.Memory, error) {
 		m.AccessedAt = asTime(row["accessed_at"])
 		m.AccessCount = asInt(row["access_count"])
 		m.Source = asString(row["source"])
+		m.EmbeddingCached = asInt(row["embedding_cached"]) == 1
+
+		// Parse embedding if present
+		if row["embedding"] != nil {
+			embeddingStr := asString(row["embedding"])
+			if data, err := base64.StdEncoding.DecodeString(embeddingStr); err == nil {
+				m.Embedding = BinaryToFloat32(data)
+			}
+		}
 
 		// Parse tags JSON
 		tagsJSON := asString(row["tags"])

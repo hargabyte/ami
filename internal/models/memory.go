@@ -53,15 +53,16 @@ func (t Tags) Value() (driver.Value, error) {
 
 // Memory represents a stored memory
 type Memory struct {
-	ID          string     `json:"id"`
-	Content     string     `json:"content"`
-	OwnerID     string     `json:"owner_id"`
-	Category    Category   `json:"category"`
-	Priority    float64    `json:"priority"`
-	CreatedAt   time.Time  `json:"created_at"`
-	AccessedAt  time.Time  `json:"accessed_at"`
-	AccessCount int        `json:"access_count"`
-	Source      string     `json:"source,omitempty"`
-	Tags        Tags       `json:"tags,omitempty"`
-	Embedding   []float32  `json:"embedding,omitempty"`
+	ID              string     `json:"id"`
+	Content         string     `json:"content"`
+	OwnerID         string     `json:"owner_id"`
+	Category        Category   `json:"category"`
+	Priority        float64    `json:"priority"`
+	CreatedAt       time.Time  `json:"created_at"`
+	AccessedAt      time.Time  `json:"accessed_at"`
+	AccessCount     int        `json:"access_count"`
+	Source          string     `json:"source,omitempty"`
+	Tags            Tags       `json:"tags,omitempty"`
+	Embedding       []float32  `json:"embedding,omitempty"`
+	EmbeddingCached bool       `json:"embedding_cached"`
 }

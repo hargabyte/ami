@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.3.1"
+var version = "0.4.0"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -770,14 +770,31 @@ func statsCmd() *cobra.Command {
 func contextCmd() *cobra.Command {
 	var robotMode bool
 	var limit int
+	var tokenBudget int
 
 	cmd := &cobra.Command{
 		Use:   "context [task]",
 		Short: "Get optimal context for a specific task",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Initialize database
-			repoPath, _ := os.Getwd()
-			db.InitDB(repoPath)
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
 			defer db.CloseDB()
 
 			task := ""
@@ -785,7 +802,8 @@ func contextCmd() *cobra.Command {
 				task = args[0]
 			}
 
-			memories, err := store.GetContextMemories(task, limit)
+			// Get context memories with budget
+			memories, err := store.GetContextMemories(task, limit, tokenBudget)
 			if err != nil {
 				if robotMode {
 					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
@@ -796,15 +814,26 @@ func contextCmd() *cobra.Command {
 			}
 
 			if robotMode {
+				// Robot Mode: Pure JSON
 				result := map[string]interface{}{
 					"status":   "ok",
 					"task":     task,
+					"budget":   tokenBudget,
 					"memories": memories,
 				}
-				jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+				jsonBytes, err := json.MarshalIndent(result, "", "  ")
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error formatting JSON: %v\n", err)
+					os.Exit(1)
+				}
 				fmt.Println(string(jsonBytes))
 			} else {
-				fmt.Printf("Optimized Context for Task: %s\n\n", task)
+				fmt.Printf("Optimized Context for Task: %s (Budget: %d tokens)\n\n", task, tokenBudget)
+				if len(memories) == 0 {
+					fmt.Println("No relevant memories found.")
+					return
+				}
+
 				for _, m := range memories {
 					fmt.Printf("[%s] %s\n", m.Category, m.Content)
 				}
@@ -813,6 +842,7 @@ func contextCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of task-related memories")
+	cmd.Flags().IntVar(&tokenBudget, "tokens", 4000, "Maximum token budget for context")
 	return cmd
 }
 
