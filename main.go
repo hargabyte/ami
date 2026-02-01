@@ -15,6 +15,14 @@ import (
 
 var version = "0.6.0"
 
+// confirmAction asks for user confirmation
+func confirmAction(prompt string) bool {
+	fmt.Printf("%s [y/N]: ", prompt)
+	var response string
+	fmt.Scanln(&response)
+	return strings.ToLower(response) == "y" || strings.ToLower(response) == "yes"
+}
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "ami",
@@ -48,6 +56,7 @@ Features:
 	rootCmd.AddCommand(consolidateCmd())
 	rootCmd.AddCommand(decisionCmd())
 	rootCmd.AddCommand(reflectCmd())
+	rootCmd.AddCommand(conflictCmd())
 	rootCmd.AddCommand(robotCmd())
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1437,6 +1446,83 @@ and provides synthesis prompts for consolidation.`,
 	cmd.Flags().IntVar(&hours, "hours", 24, "Hours to look back")
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of memories to reflect on")
 
+	return cmd
+}
+
+func conflictCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "conflict",
+		Short: "Detect and resolve conflicting memories",
+		Long: `Detect memories that may contradict each other using semantic similarity.
+This helps maintain team consensus across multiple agents.`,
+	}
+
+	resolveCmd := &cobra.Command{
+		Use:   "resolve <id1> <id2>",
+		Short: "Resolve a conflict between two memories",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			repoPath, _ := os.Getwd()
+			db.InitDB(repoPath)
+			defer db.CloseDB()
+
+			id1 := args[0]
+			id2 := args[1]
+
+			// Get both memories
+			m1, err := store.GetMemoryByID(id1)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error fetching memory %s: %v\n", id1, err)
+				os.Exit(1)
+			}
+			m2, err := store.GetMemoryByID(id2)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error fetching memory %s: %v\n", id2, err)
+				os.Exit(1)
+			}
+
+			fmt.Println("Memory 1:")
+			fmt.Printf("  ID: %s\n", m1.ID)
+			fmt.Printf("  Content: %s\n", m1.Content)
+			fmt.Printf("  Category: %s\n", m1.Category)
+
+			fmt.Println("\nMemory 2:")
+			fmt.Printf("  ID: %s\n", m2.ID)
+			fmt.Printf("  Content: %s\n", m2.Content)
+			fmt.Printf("  Category: %s\n", m2.Category)
+
+			fmt.Println("\nResolution options:")
+			fmt.Println("1. Keep Memory 1 (deprecate Memory 2)")
+			fmt.Println("2. Keep Memory 2 (deprecate Memory 1)")
+			fmt.Println("3. Merge into Memory 1")
+			fmt.Println("4. Keep both (no action)")
+
+			fmt.Print("\nSelect option [1-4]: ")
+			var choice int
+			fmt.Scanln(&choice)
+
+			switch choice {
+			case 1:
+				store.UpdateMemoryStatus(id2, models.StatusDeprecated)
+				fmt.Printf("✓ Deprecated %s\n", id2)
+			case 2:
+				store.UpdateMemoryStatus(id1, models.StatusDeprecated)
+				fmt.Printf("✓ Deprecated %s\n", id1)
+			case 3:
+				// Simple merge: combine content
+				mergedContent := fmt.Sprintf("%s | %s", m1.Content, m2.Content)
+				store.UpdateMemoryContent(id1, mergedContent)
+				store.UpdateMemoryStatus(id2, models.StatusDeprecated)
+				fmt.Printf("✓ Merged into %s, deprecated %s\n", id1, id2)
+			case 4:
+				fmt.Println("No action taken.")
+			default:
+				fmt.Println("Invalid choice.")
+			}
+		},
+	}
+
+	cmd.AddCommand(resolveCmd)
 	return cmd
 }
 
