@@ -1005,3 +1005,67 @@ func FindAutoPromotionCandidates(minAccessCount int, minOutcome float64) ([]mode
 
 	return parseMemoriesJSON(output)
 }
+
+// GetMemoryByID retrieves a specific memory by ID
+func GetMemoryByID(id string) (*models.Memory, error) {
+	query := fmt.Sprintf(`
+		SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status
+		FROM memories
+		WHERE id = '%s'
+	`, id)
+
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve memory: %w", err)
+	}
+
+	memories, err := parseMemoriesJSON(output)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(memories) == 0 {
+		return nil, fmt.Errorf("memory not found: %s", id)
+	}
+
+	return &memories[0], nil
+}
+
+// UpdateMemoryStatus updates the status of a memory
+func UpdateMemoryStatus(id string, status models.Status) error {
+	query := fmt.Sprintf(`
+		UPDATE memories
+		SET status = '%s'
+		WHERE id = '%s'
+	`, string(status), id)
+
+	_, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return fmt.Errorf("failed to update memory status: %w", err)
+	}
+
+	commitMsg := fmt.Sprintf("Update status of memory %s to %s", id, status)
+	DoltCommit(commitMsg)
+
+	return nil
+}
+
+// UpdateMemoryContent updates the content of a memory
+func UpdateMemoryContent(id string, content string) error {
+	escapedContent := strings.ReplaceAll(content, "'", "''")
+	query := fmt.Sprintf(`
+		UPDATE memories
+		SET content = '%s'
+		WHERE id = '%s'
+	`, escapedContent, id)
+
+	_, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return fmt.Errorf("failed to update memory content: %w", err)
+	}
+
+	commitMsg := fmt.Sprintf("Update content of memory %s", id)
+	DoltCommit(commitMsg)
+
+	return nil
+}
