@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS memories (
     access_count INT DEFAULT 0,
     source VARCHAR(255),
     tags JSON,
-    embedding BLOB
+    embedding BLOB,
+    status ENUM('verified', 'under_review', 'deprecated') DEFAULT 'verified'
 );
 
 CREATE TABLE IF NOT EXISTS memory_links (
