@@ -39,6 +39,22 @@ The core interface for single-agent performance:
 - **Claude Code Playgrounds**: Instead of building early text-based D2 generators, we will leverage the `playground` plugin at the end of the project.
 - **Interactive Knowledge Graph**: Generate standalone HTML playgrounds to allow @hargabyte to visually explore and "tweak" the collective HSA mind.
 
+## 🔮 v0.5.0 Strategy: Decision Support
+Transforming AMI from a memory store into a proactive **Decision Support System**.
+
+### 1. Decision Outcome Tracking
+- **`ami decision --track`**: Log a technical decision linked to current context.
+- **`ami decision --outcome`**: Update a decision's success state.
+- **Salience Boosting**: Successful decisions automatically increase the priority and reinforce the "synaptic strength" of the associated memories.
+
+### 2. Native MCP Server
+- Implement a built-in **Model Context Protocol** (MCP) server.
+- Allows IDE agents (Cursor, Windsurf) to natively query AMI without CLI boilerplate.
+
+### 3. Causal Knowledge Graph
+- **`ami link --relation causal`**: Link memories based on cause-and-effect.
+- Enables higher-order reasoning (e.g., "Fact A" → "Resulted in" → "Decision B").
+
 ## 📊 Estimates
 | Sprint | Features | Effort |
 |--------|----------|--------|
