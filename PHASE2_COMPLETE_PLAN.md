@@ -39,23 +39,19 @@ The core interface for single-agent performance:
 - **Claude Code Playgrounds**: Instead of building early text-based D2 generators, we will leverage the `playground` plugin at the end of the project.
 - **Interactive Knowledge Graph**: Generate standalone HTML playgrounds to allow @hargabyte to visually explore and "tweak" the collective HSA mind.
 
-## 🔮 v0.5.0 Strategy: Decision Support
-Transforming AMI from a memory store into a proactive **Decision Support System**.
+## 🔮 v0.6.0 Strategy: The Collective Conscience
+Scaling from individual memory to unified team wisdom.
 
-### 1. Decision Outcome Tracking
-- **`ami decision --track`**: Log a technical decision linked to current context.
-- **`ami decision --outcome`**: Update a decision's success state.
-- **Salience Boosting**: Successful decisions automatically increase the priority and reinforce the "synaptic strength" of the associated memories.
+### 1. Autonomous Fact Promotion
+- **Mechanism**: Identify memories with high "Global Utility" (frequently accessed by multiple agents) and automatically suggest them for promotion to the Global Brain.
+- **Goal**: Minimize redundant learning across the team.
 
-### 2. Autonomous Curation & Reflection (`ami reflect`)
-- **Focus**: Expanding internal intelligence for agents before human-facing interfaces.
-- **Synthesis Engine**: Identifies "Episodic Clusters" (noisy task logs) and auto-synthesizes them into a single, high-signal "Semantic Fact."
-- **Traceability**: Maintains links from the synthesized fact back to original episodic sources.
-- **Self-Optimization**: Autonomous priority adjustments based on cross-agent retrieval frequency.
+### 2. Peer Review & Consensus
+- **Conflict Resolution**: Use Dolt branching to manage conflicting "facts" recorded by different agents.
+- **Consensus Workflow**: Propose a change to a Global memory -> Team agents review/verify -> Merge to Main.
 
-### 3. Causal Knowledge Graph
-- **`ami link --relation causal`**: Link memories based on cause-and-effect.
-- Enables higher-order reasoning (e.g., "Fact A" → "Resulted in" → "Decision B").
+### 3. Cross-Project Context Awareness
+- **Logic**: Enable `ami context` to optionally include "verified" memories from related project IDs if the current project context is sparse.
 
 ## 📊 Estimates
 | Sprint | Features | Effort |
