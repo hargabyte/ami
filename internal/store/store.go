@@ -990,7 +990,7 @@ func FindAutoPromotionCandidates(minAccessCount int, minOutcome float64) ([]mode
 		SELECT DISTINCT m.id, m.content, m.owner_id, m.category, m.priority,
 		       m.created_at, m.accessed_at, m.access_count, m.source, m.tags, m.status
 		FROM memories m
-		JOIN decisions d ON JSON_CONTAINS(d.memory_ids, QUOTE(m.id))
+		JOIN decisions d ON JSON_CONTAINS(d.memory_ids, CONCAT('"', m.id, '"'))
 		WHERE m.access_count >= %d
 		  AND d.outcome >= %f
 		  AND m.category IN ('semantic', 'core')
