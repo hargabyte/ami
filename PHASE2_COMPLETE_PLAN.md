@@ -53,6 +53,22 @@ Scaling from individual memory to unified team wisdom.
 ### 3. Cross-Project Context Awareness
 - **Logic**: Enable `ami context` to optionally include "verified" memories from related project IDs if the current project context is sparse.
 
+## 🔮 v0.7.0 Strategy: Environmental Awareness
+Bridging the gap between the brain and the codebase.
+
+### 1. Codebase Curation (`ami curate`)
+- **Mechanism**: Use Cortex (CX) to perform a deep-scan of the current directory.
+- **Output**: Automatically generate "Semantic" and "Core" memories about the architecture, key patterns, and "Keystone" files.
+- **Goal**: Zero-config memory initialization for new projects.
+
+### 2. IDE Bridge (`ami init`)
+- **Feature**: Export high-priority "Core" and "Semantic" facts directly into `.cursorrules`, `.clauderules`, and `.windsurfrules`.
+- **Sync**: Keep the local IDE rules in lock-step with the AMI Global Brain.
+
+### 3. Session Pairing (`ami pairing`)
+- **Logic**: A background mode that "listens" to terminal activity or task logs and suggests new episodic memories in real-time.
+- **Action**: Prevent context loss during intense multi-hour coding sessions.
+
 ## 📊 Estimates
 | Sprint | Features | Effort |
 |--------|----------|--------|
