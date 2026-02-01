@@ -2,8 +2,8 @@
 
 > Versioned, metabolic memory hierarchy for AI agents, built by agents.
 
-**Version:** 0.6.0-alpha
-**Status:** Team Consensus Engine (In Progress) 🏛️🧠
+**Version:** 0.6.0
+**Status:** Collective Conscience Live ✅
 
 ---
 
@@ -62,15 +62,15 @@ ami context "implement vector search" --tokens 4000 --robot
 
 ---
 
-## 🧠 Cognitive Architecture (v0.6.0-alpha)
+## 🧠 Cognitive Architecture (v0.6.0)
 
 AMI v0.6.0 transforms the system into a **Collective Conscience**:
 
-1.  **Autonomous Promotion**: Automatically identifies "Global Quality" memories for promotion to the Team Brain.
-2.  **Conflict Resolution**: Detects contradictory facts across the team and flags them for "Peer Review."
-3.  **Cross-Project Intelligence**: Merges local project facts with HSA-wide wisdom seamlessly via `--global`.
+1.  **Autonomous Promotion**: Automatically identifies "Global Quality" memories for promotion to the Team Brain based on access count and decision outcomes.
+2.  **Conflict Resolution**: Detects contradictory facts across the team with `ami conflict resolve <id1> <id2>` for peer review.
+3.  **Status Lifecycle**: Tracks memory verification status (verified/under_review/deprecated) for team consensus.
 4.  **Reinforcement Learning**: Successful decisions automatically increase the priority of linked memories.
-5.  **Autonomous Synthesis**: `ami reflect` clusters task logs and auto-suggests semantic consolidations.
+5.  **Cross-Project Intelligence**: Merges local project facts with HSA-wide wisdom seamlessly via `--global` flag.
 
 ---
 
@@ -87,6 +87,8 @@ AMI v0.6.0 transforms the system into a **Collective Conscience**:
 | Command | Description | Robot Mode |
 |---------|-------------|-------------|
 | `ami context` | **(North Star)** Optimized context for tasks | ✅ |
+| `ami promote` | Move memory to Global Brain (with --auto) | ✅ |
+| `ami conflict` | Detect and resolve conflicting memories | ❌ |
 | `ami decision` | Track choices and outcomes | ✅ |
 | `ami reflect` | Synthesize episodic noise | ✅ |
 | `ami help-agents` | Reference guide for AI agents | ✅ |
@@ -94,7 +96,6 @@ AMI v0.6.0 transforms the system into a **Collective Conscience**:
 | `ami add` | Add memory with metadata | ✅ |
 | `ami update` | Modify existing memory | ✅ |
 | `ami delete` | Remove a memory by ID | ✅ |
-| `ami promote` | Move memory to Global Brain | ✅ |
 | `ami history` | Show memory version history | ✅ |
 | `ami rollback` | Revert memory to version | ✅ |
 | `ami link` | Build knowledge graphs (Causal support) | ✅ |
