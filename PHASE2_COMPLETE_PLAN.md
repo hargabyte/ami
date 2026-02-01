@@ -25,7 +25,14 @@ Borrowing best practices from the `cx` (Cortex) CLI:
 - **`ami link <id1> <id2>`**: Build a knowledge graph by linking related memories.
 - **`ami keystones`**: Identify the most central/frequently accessed facts in the brain.
 
-### 4. Smart Context Management
+### 4. ByteRover Inspired Auto-Intelligence
+Adopting high-value patterns from competitive analysis:
+- **`ami curate`**: Use CX to auto-scan codebase domains and generate initial memories.
+- **`ami init`**: Export AMI "Core" and "Semantic" memories into `.cursorrules` / `.clauderules`.
+- **`ami pairing`**: A "Session Listener" that observes task activity and suggests new episodic memories.
+- **`ami status` (Visual)**: D2-based knowledge graph visualization (inspired by ByteRover context trees).
+
+### 5. Smart Context Management
 - **`ami context --task "..." --tokens 4000`**: Automatically pack the most relevant, high-priority, non-decayed memories into a prompt-ready format.
 
 ## 📊 Estimates
