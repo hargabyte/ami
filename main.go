@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/hargabyte/ami/internal/db"
 	"github.com/hargabyte/ami/internal/models"
@@ -11,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.4.0"
+var version = "0.5.0"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -44,6 +46,8 @@ Features:
 	rootCmd.AddCommand(tagsCmd())
 	rootCmd.AddCommand(checkpointCmd())
 	rootCmd.AddCommand(consolidateCmd())
+	rootCmd.AddCommand(decisionCmd())
+	rootCmd.AddCommand(reflectCmd())
 	rootCmd.AddCommand(robotCmd())
 
 	if err := rootCmd.Execute(); err != nil {
@@ -900,8 +904,17 @@ func helpAgentsCmd() *cobra.Command {
 2. **During a Task**: Store important discoveries
    ` + "`" + `ami add "Decision: use Go 1.22 for this module" --category working --tags technical` + "`" + `
 
-3. **After a Task**: Clean up and promote
+3. **During a Task**: Track decisions with linked memories
+   ` + "`" + `ami decision track "Use binary embeddings" --task "v0.4.0" --memories "abc,def"` + "`" + `
+
+4. **After a Task**: Record decision outcomes
+   ` + "`" + `ami decision outcome <id> --outcome 0.9 --feedback "Worked perfectly"` + "`" + `
+
+5. **After a Task**: Clean up and promote
    ` + "`" + `ami promote <memory-id>` + "`" + ` (if it's a permanent team truth)
+
+6. **Periodic Maintenance**: Reflect on episodic noise
+   ` + "`" + `ami reflect --limit 10 --hours 24` + "`" + `
 
 ## 📂 Memory Categories
 
@@ -910,9 +923,27 @@ func helpAgentsCmd() *cobra.Command {
 - **Working**: Task-specific context. Use for notes on the current session.
 - **Episodic**: Event logs. Use for "I did X at time Y".
 
+## 🎯 Decision Tracking (v0.5.0+)
+
+Track the decisions you make and learn from their outcomes:
+
+**Track a Decision:**
+   ` + "`" + `ami decision track "your decision text" --task "project-id" --memories "id1,id2"` + "`" + `
+
+**Record Outcome:**
+   ` + "`" + `ami decision outcome <decision-id> --outcome 0.8 --feedback "Notes"` + "`" + `
+
+**Synaptic Boost:** When outcome > 0.8, linked memories automatically get priority reinforcement.
+
+## 🔍 Reflection (v0.5.0+)
+
+   ` + "`" + `ami reflect --limit 10 --hours 24` + "`" + `
+
+Identifies episodic noise and suggests semantic synthesis for consolidation.
+
 ## 🤖 Robot Mode
 
-ALWAYS use the ` + "`" + `--robot` + "`" + ` flag for programmatic integration. 
+ALWAYS use the ` + "`" + `--robot` + "`" + ` flag for programmatic integration.
 It returns pure JSON to stdout.
 
 ## 💡 Best Practices
@@ -920,6 +951,8 @@ It returns pure JSON to stdout.
 - **Atomic Memories**: One fact per memory. Don't mix user preferences with technical specs.
 - **Source Attribution**: Always use ` + "`" + `--source` + "`" + ` so future you knows WHY you believe a fact.
 - **Aggressive Tagging**: Use tags for project IDs and concepts to make filtering faster.
+- **Decision Tracking**: Link memories to decisions so successful choices reinforce useful knowledge.
+- **Regular Reflection**: Use ` + "`" + `ami reflect` + "`" + ` to convert episodic noise into semantic facts.
 `)
 		},
 	}
@@ -1054,6 +1087,312 @@ func consolidateCmd() *cobra.Command {
 			fmt.Println("Consolidating memories")
 		},
 	}
+}
+
+func decisionCmd() *cobra.Command {
+	var taskID string
+	var memoryIDsStr string
+	var outcomeStr string
+	var feedback string
+	var robotMode bool
+
+	cmd := &cobra.Command{
+		Use:   "decision [action]",
+		Short: "Track decisions and their outcomes",
+		Long: `Track decisions and reinforce memories that lead to good outcomes.
+
+Actions:
+  track [decision]    - Track a new decision with linked memories
+  outcome <id>        - Record the outcome of a decision (0.0 to 1.0)
+  list [task_id]      - List all decisions, optionally filtered by task
+
+Examples:
+  ami decision track "Use binary embeddings" --task "v0.4.0" --memories "abc,def"
+  ami decision outcome abc-123 --outcome 0.9 --feedback "Worked perfectly"
+  ami decision list v0.4.0`,
+	}
+
+	trackCmd := &cobra.Command{
+		Use:   "track [decision]",
+		Short: "Track a new decision",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			// Parse memory IDs
+			var memoryIDs []string
+			if memoryIDsStr != "" {
+				memoryIDs = strings.Split(memoryIDsStr, ",")
+				// Trim spaces from each ID
+				for i, id := range memoryIDs {
+					memoryIDs[i] = strings.TrimSpace(id)
+				}
+			}
+
+			// Track the decision
+			decisionText := strings.Join(args, " ")
+			decision, err := store.TrackDecision(taskID, memoryIDs, decisionText, "cli")
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error tracking decision: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				jsonBytes, _ := json.MarshalIndent(decision, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				fmt.Printf("✓ Decision tracked: %s\n", decision.ID)
+				fmt.Printf("  Task: %s\n", decision.TaskID)
+				fmt.Printf("  Text: %s\n", decision.DecisionText)
+				if len(decision.MemoryIDs) > 0 {
+					fmt.Printf("  Linked memories: %d\n", len(decision.MemoryIDs))
+				}
+			}
+		},
+	}
+	trackCmd.Flags().StringVar(&taskID, "task", "", "Task ID")
+	trackCmd.Flags().StringVar(&memoryIDsStr, "memories", "", "Comma-separated memory IDs")
+
+	outcomeCmd := &cobra.Command{
+		Use:   "outcome <decision_id>",
+		Short: "Record the outcome of a decision",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				}
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			decisionID := args[0]
+			var outcome float64
+			_, err = fmt.Sscanf(outcomeStr, "%f", &outcome)
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"invalid outcome: %v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error: invalid outcome value\n")
+				}
+				os.Exit(1)
+			}
+
+			// Validate outcome range
+			if outcome < 0.0 || outcome > 1.0 {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"outcome must be between 0.0 and 1.0"}`+"\n")
+				} else {
+					fmt.Fprintf(os.Stderr, "Error: outcome must be between 0.0 and 1.0\n")
+				}
+				os.Exit(1)
+			}
+
+			// Record the outcome
+			err = store.RecordOutcome(decisionID, outcome, feedback)
+			if err != nil {
+				if robotMode {
+					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error recording outcome: %v\n", err)
+				}
+				os.Exit(1)
+			}
+
+			if robotMode {
+				fmt.Printf(`{"status":"success","decision_id":"%s","outcome":%f}`+"\n", decisionID, outcome)
+			} else {
+				fmt.Printf("✓ Outcome recorded: %.2f\n", outcome)
+				if outcome > 0.8 {
+					fmt.Printf("  → High success! Linked memories reinforced.\n")
+				}
+			}
+		},
+	}
+	outcomeCmd.Flags().StringVar(&outcomeStr, "outcome", "", "Outcome value (0.0 to 1.0)")
+	outcomeCmd.Flags().StringVar(&feedback, "feedback", "", "Optional feedback text")
+	outcomeCmd.MarkFlagRequired("outcome")
+
+	listCmd := &cobra.Command{
+		Use:   "list [task_id]",
+		Short: "List decisions",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			listTaskID := ""
+			if len(args) > 0 {
+				listTaskID = args[0]
+			}
+
+			decisions, err := store.ListDecisions(listTaskID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error listing decisions: %v\n", err)
+				os.Exit(1)
+			}
+
+			if robotMode {
+				jsonBytes, _ := json.MarshalIndent(decisions, "", "  ")
+				fmt.Println(string(jsonBytes))
+			} else {
+				if len(decisions) == 0 {
+					fmt.Println("No decisions found.")
+					return
+				}
+
+				for _, d := range decisions {
+					outcomeStr := "pending"
+					if d.Outcome > 0 {
+						outcomeStr = fmt.Sprintf("%.2f", d.Outcome)
+					}
+
+					fmt.Printf("\n%s\n", d.ID)
+					fmt.Printf("  Task: %s\n", d.TaskID)
+					fmt.Printf("  Decision: %s\n", d.DecisionText)
+					fmt.Printf("  Outcome: %s\n", outcomeStr)
+					if d.Feedback != "" {
+						fmt.Printf("  Feedback: %s\n", d.Feedback)
+					}
+					if len(d.MemoryIDs) > 0 {
+						fmt.Printf("  Linked memories: %d\n", len(d.MemoryIDs))
+					}
+				}
+			}
+		},
+	}
+	listCmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
+
+	cmd.AddCommand(trackCmd)
+	cmd.AddCommand(outcomeCmd)
+	cmd.AddCommand(listCmd)
+
+	return cmd
+}
+
+func reflectCmd() *cobra.Command {
+	var hours int
+	var limit int
+
+	cmd := &cobra.Command{
+		Use:   "reflect",
+		Short: "Reflect on episodic memories and suggest synthesis",
+		Long: `Reflect on recent episodic memories and suggest semantic synthesis.
+This is the MVP for autonomous reflection - it identifies noisy clusters
+and provides synthesis prompts for consolidation.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			// Initialize database
+			repoPath, err := os.Getwd()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+				os.Exit(1)
+			}
+
+			if err := db.InitDB(repoPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+				os.Exit(1)
+			}
+			defer db.CloseDB()
+
+			// Calculate the time threshold
+			sinceTime := time.Now().Add(-time.Duration(hours) * time.Hour)
+
+			// Get episodic memories from the last N hours
+			memories, err := store.CatchupMemories(store.CatchupOptions{
+				Limit:    limit,
+				Category: "episodic",
+				Since:    sinceTime.Format("2006-01-02 15:04:05"),
+			})
+
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error fetching memories: %v\n", err)
+				os.Exit(1)
+			}
+
+			if len(memories) == 0 {
+				fmt.Println("No episodic memories found for reflection.")
+				return
+			}
+
+			fmt.Printf("🤔 Reflecting on %d episodic memories from the last %d hour(s)\n\n", len(memories), hours)
+
+			// Display memories
+			for i, m := range memories {
+				fmt.Printf("%d. [%s] %s\n", i+1, m.ID[:8], m.Content)
+				if len(m.Tags) > 0 {
+					fmt.Printf("   Tags: %v\n", m.Tags)
+				}
+			}
+
+			fmt.Println("\n--- Synthesis Prompt ---")
+			fmt.Println("Review the above memories and suggest 1-3 Semantic Facts that:")
+			fmt.Println("  • Capture the essential knowledge")
+			fmt.Println("  • Eliminate redundant detail")
+			fmt.Println("  • Maintain high information density")
+			fmt.Println()
+			fmt.Println("For each suggested fact, provide:")
+			fmt.Println("  1. Title (short, descriptive)")
+			fmt.Println("  2. Content (concise, definitive statement)")
+			fmt.Println("  3. Related memory IDs (for traceability)")
+			fmt.Println()
+			fmt.Println("Example:")
+			fmt.Println("  Fact 1:")
+			fmt.Println("    Title: Binary embedding storage")
+			fmt.Println("    Content: AMI v0.4.0 uses BLOB fields with HEX encoding to store float32 embeddings,")
+			fmt.Println("               providing bit-perfect precision and enabling semantic search.")
+			fmt.Println("    Related: abc-123, def-456")
+		},
+	}
+	cmd.Flags().IntVar(&hours, "hours", 24, "Hours to look back")
+	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of memories to reflect on")
+
+	return cmd
 }
 
 func robotCmd() *cobra.Command {

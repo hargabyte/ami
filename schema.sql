@@ -23,6 +23,17 @@ CREATE TABLE IF NOT EXISTS memory_links (
     FOREIGN KEY (to_id) REFERENCES memories(id)
 );
 
+CREATE TABLE IF NOT EXISTS decisions (
+    id VARCHAR(36) PRIMARY KEY,
+    task_id VARCHAR(255),
+    memory_ids JSON,
+    decision_text TEXT,
+    outcome FLOAT DEFAULT 0.0,
+    feedback TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX idx_memories_category ON memories(category);
 CREATE INDEX idx_memories_priority ON memories(priority DESC);
 CREATE INDEX idx_memories_accessed ON memories(accessed_at DESC);
+CREATE INDEX idx_decisions_outcome ON decisions(outcome DESC);

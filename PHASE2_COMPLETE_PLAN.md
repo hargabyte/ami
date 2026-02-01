@@ -47,9 +47,11 @@ Transforming AMI from a memory store into a proactive **Decision Support System*
 - **`ami decision --outcome`**: Update a decision's success state.
 - **Salience Boosting**: Successful decisions automatically increase the priority and reinforce the "synaptic strength" of the associated memories.
 
-### 2. Native MCP Server
-- Implement a built-in **Model Context Protocol** (MCP) server.
-- Allows IDE agents (Cursor, Windsurf) to natively query AMI without CLI boilerplate.
+### 2. Autonomous Curation & Reflection (`ami reflect`)
+- **Focus**: Expanding internal intelligence for agents before human-facing interfaces.
+- **Synthesis Engine**: Identifies "Episodic Clusters" (noisy task logs) and auto-synthesizes them into a single, high-signal "Semantic Fact."
+- **Traceability**: Maintains links from the synthesized fact back to original episodic sources.
+- **Self-Optimization**: Autonomous priority adjustments based on cross-agent retrieval frequency.
 
 ### 3. Causal Knowledge Graph
 - **`ami link --relation causal`**: Link memories based on cause-and-effect.
