@@ -907,6 +907,7 @@ func parseMemoriesJSON(output string) ([]models.Memory, error) {
 		m.AccessCount = asInt(row["access_count"])
 		m.Source = asString(row["source"])
 		m.EmbeddingCached = asInt(row["embedding_cached"]) == 1
+		m.Status = models.Status(asString(row["status"]))
 
 		// Parse embedding if present
 		if row["embedding"] != nil {
@@ -979,4 +980,28 @@ func asTime(v interface{}) time.Time {
 		return t
 	}
 	return time.Time{}
+}
+
+// FindAutoPromotionCandidates finds memories eligible for promotion to global brain
+// Criteria: high access count, linked to successful decisions, semantic or core category
+func FindAutoPromotionCandidates(minAccessCount int, minOutcome float64) ([]models.Memory, error) {
+	// Find memories that were linked to successful decisions
+	query := fmt.Sprintf(`
+		SELECT DISTINCT m.id, m.content, m.owner_id, m.category, m.priority,
+		       m.created_at, m.accessed_at, m.access_count, m.source, m.tags, m.status
+		FROM memories m
+		JOIN decisions d ON JSON_CONTAINS(d.memory_ids, QUOTE(m.id))
+		WHERE m.access_count >= %d
+		  AND d.outcome >= %f
+		  AND m.category IN ('semantic', 'core')
+		  AND m.status = 'verified'
+		ORDER BY m.access_count DESC, m.priority DESC
+	`, minAccessCount, minOutcome)
+
+	output, err := ExecDoltSQLJSON(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query promotion candidates: %w", err)
+	}
+
+	return parseMemoriesJSON(output)
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.5.0"
+var version = "0.6.0"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -853,36 +853,81 @@ func contextCmd() *cobra.Command {
 func promoteCmd() *cobra.Command {
 	var robotMode bool
 	var globalPath string
+	var autoPromote bool
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "promote [id]",
 		Short: "Promote a memory to the global team brain",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			// Initialize database
 			repoPath, _ := os.Getwd()
 			db.InitDB(repoPath)
 			defer db.CloseDB()
 
-			id := args[0]
-			if err := store.PromoteMemory(id, globalPath); err != nil {
-				if robotMode {
-					fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
-				} else {
-					fmt.Fprintf(os.Stderr, "Error promoting memory: %v\n", err)
+			if autoPromote {
+				// Auto-promote eligible memories
+				memories, err := store.FindAutoPromotionCandidates(5, 0.8)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error finding candidates: %v\n", err)
+					os.Exit(1)
 				}
-				os.Exit(1)
-			}
 
-			if robotMode {
-				fmt.Printf(`{"status":"ok","message":"promoted memory %s to global store"}`+"\n", id)
+				if len(memories) == 0 {
+					fmt.Println("No memories meet the promotion criteria.")
+					return
+				}
+
+				if dryRun {
+					fmt.Printf("Found %d candidate(s) for promotion:\n", len(memories))
+					for _, m := range memories {
+						fmt.Printf("  - [%s] %s (access_count: %d, priority: %.2f, category: %s)\n",
+							m.ID[:8], m.Content, m.AccessCount, m.Priority, m.Category)
+					}
+					return
+				}
+
+				if !robotMode && !confirmAction(fmt.Sprintf("Promote %d memories to global brain?", len(memories))) {
+					fmt.Println("Promotion cancelled.")
+					return
+				}
+
+				for _, m := range memories {
+					if err := store.PromoteMemory(m.ID, globalPath); err != nil {
+						fmt.Fprintf(os.Stderr, "Error promoting %s: %v\n", m.ID, err)
+					} else {
+						fmt.Printf("✓ Promoted %s\n", m.ID[:8])
+					}
+				}
 			} else {
-				fmt.Printf("✓ Promoted memory %s to global brain (%s)\n", id, globalPath)
+				// Promote a specific memory
+				if len(args) == 0 {
+					fmt.Fprintln(os.Stderr, "Error: memory ID required (unless using --auto)")
+					os.Exit(1)
+				}
+				id := args[0]
+				if err := store.PromoteMemory(id, globalPath); err != nil {
+					if robotMode {
+						fmt.Printf(`{"status":"error","message":"%v"}`+"\n", err)
+					} else {
+						fmt.Fprintf(os.Stderr, "Error promoting memory: %v\n", err)
+					}
+					os.Exit(1)
+				}
+
+				if robotMode {
+					fmt.Printf(`{"status":"ok","message":"promoted memory %s to global store"}`+"\n", id)
+				} else {
+					fmt.Printf("✓ Promoted memory %s to global brain (%s)\n", id, globalPath)
+				}
 			}
 		},
 	}
 	cmd.Flags().BoolVar(&robotMode, "robot", false, "Robot mode: output JSON")
 	cmd.Flags().StringVar(&globalPath, "path", "/home/hargabyte/.ami/global", "Path to the global AMI store")
+	cmd.Flags().BoolVar(&autoPromote, "auto", false, "Auto-promote memories meeting criteria")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show candidates without promoting")
 	return cmd
 }
 
