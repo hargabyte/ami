@@ -63,4 +63,5 @@ type Memory struct {
 	AccessCount int        `json:"access_count"`
 	Source      string     `json:"source,omitempty"`
 	Tags        Tags       `json:"tags,omitempty"`
+	Embedding   []float32  `json:"embedding,omitempty"`
 }

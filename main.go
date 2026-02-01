@@ -270,6 +270,7 @@ func recallCmd() *cobra.Command {
 	var categoryFilter string
 	var ownerFilter string
 	var withDecay bool
+	var semanticSearch bool
 
 	cmd := &cobra.Command{
 		Use:   "recall [query]",
@@ -310,6 +311,7 @@ func recallCmd() *cobra.Command {
 				Category:   categoryFilter,
 				OwnerID:    ownerFilter,
 				WithDecay:  withDecay,
+				Semantic:   semanticSearch,
 			}
 
 			// Search memories
@@ -384,6 +386,7 @@ func recallCmd() *cobra.Command {
 	cmd.Flags().StringVar(&categoryFilter, "category", "", "Filter by category (core|semantic|working|episodic)")
 	cmd.Flags().StringVar(&ownerFilter, "owner", "", "Filter by memory owner")
 	cmd.Flags().BoolVar(&withDecay, "decay", false, "Use decay-weighted scoring for recall")
+	cmd.Flags().BoolVar(&semanticSearch, "semantic", false, "Use embeddings-based semantic search")
 	return cmd
 }
 

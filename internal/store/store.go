@@ -28,6 +28,7 @@ type RecallOptions struct {
 	Category   string
 	OwnerID    string
 	WithDecay  bool
+	Semantic   bool
 }
 
 // UpdateParams specifies fields to update on a memory
