@@ -2,8 +2,8 @@
 
 > Versioned, metabolic memory hierarchy for AI agents, built by agents.
 
-**Version:** 0.5.0
-**Status:** Decision Support System Live ✅
+**Version:** 0.6.0-alpha
+**Status:** Team Consensus Engine (In Progress) 🏛️🧠
 
 ---
 
@@ -18,6 +18,7 @@ AMI (Agent Memory Intelligence) is a specialized "sidecar" for AI agents to mana
 - **Intelligent**: Understands concept and context via Semantic Search and Automatic Packing.
 - **Metabolic**: Memories age and decay naturally unless reinforced (Ebbinghaus curve).
 - **Decision-Driven**: Learns from decision outcomes to prioritize high-value knowledge.
+- **Collective**: Moves from individual memory to team-wide consensus (v0.6.0).
 
 ---
 
@@ -28,6 +29,12 @@ AMI (Agent Memory Intelligence) is a specialized "sidecar" for AI agents to mana
 cd /home/hargabyte/ami
 go build -o ami main.go
 ```
+
+### Automatic Multi-Platform Binaries
+v0.5.0+ includes a GitHub Actions workflow that automatically builds binaries for:
+- Linux (amd64)
+- Windows (amd64)
+- macOS (arm64 & amd64)
 
 ### Basic Usage
 
@@ -55,14 +62,15 @@ ami context "implement vector search" --tokens 4000 --robot
 
 ---
 
-## 🧠 Cognitive Architecture (v0.5.0)
+## 🧠 Cognitive Architecture (v0.6.0-alpha)
 
-AMI v0.5.0 transforms the system into a **Decision Support System**:
+AMI v0.6.0 transforms the system into a **Collective Conscience**:
 
-1.  **Reinforcement Learning**: Successful decisions automatically increase the priority of linked memories.
-2.  **Autonomous Synthesis**: `ami reflect` clusters task logs and auto-suggests semantic consolidations.
-3.  **Causal Knowledge Graph**: Support for causal links (Fact A → Resulted in → Decision B).
-4.  **Semantic Intuition**: Concept-based search and bit-perfect token packing.
+1.  **Autonomous Promotion**: Automatically identifies "Global Quality" memories for promotion to the Team Brain.
+2.  **Conflict Resolution**: Detects contradictory facts across the team and flags them for "Peer Review."
+3.  **Cross-Project Intelligence**: Merges local project facts with HSA-wide wisdom seamlessly via `--global`.
+4.  **Reinforcement Learning**: Successful decisions automatically increase the priority of linked memories.
+5.  **Autonomous Synthesis**: `ami reflect` clusters task logs and auto-suggests semantic consolidations.
 
 ---
 
