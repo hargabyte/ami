@@ -27,9 +27,9 @@ func confirmAction(prompt string) bool {
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "ami",
-		Short: "Agent Memory Intelligence - versioned memory for AI agents",
-		Long: `ami is a CLI tool for managing agent memory using DoltDB.
+		Use:   "chaos",
+		Short: "Cognitive Heuristic Agent Operating System - versioned memory for AI agents",
+		Long: `CHAOS is a CLI tool for managing agent memory using DoltDB.
 		
 Features:
   - Versioned memory storage (git-like)
@@ -960,30 +960,31 @@ func helpAgentsCmd() *cobra.Command {
 		Use:   "help-agents",
 		Short: "Output agent-optimized command reference",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(`# AMI Command Reference for AI Agents
+			fmt.Println(`# CHAOS Command Reference for AI Agents
 
-> This tool manages your long-term memory using a versioned, metabolic architecture.
+> Cognitive Heuristic Agent Operating System
+> This system manages your long-term memory using a versioned, metabolic architecture.
 > Use it to store facts, decisions, and patterns so you don't burn tokens re-learning them.
 
 ## 🧠 Quick Start Workflow
 
 1. **Before a Task**: Get focused context
-   ` + "`" + `ami context "your task description" --limit 5 --robot` + "`" + `
+   ` + "`" + `chaos context "your task description" --limit 5 --robot` + "`" + `
 
 2. **During a Task**: Store important discoveries
-   ` + "`" + `ami add "Decision: use Go 1.22 for this module" --category working --tags technical` + "`" + `
+   ` + "`" + `chaos add "Decision: use Go 1.22 for this module" --category working --tags technical` + "`" + `
 
 3. **During a Task**: Track decisions with linked memories
-   ` + "`" + `ami decision track "Use binary embeddings" --task "v0.4.0" --memories "abc,def"` + "`" + `
+   ` + "`" + `chaos decision track "Use binary embeddings" --task "v0.4.0" --memories "abc,def"` + "`" + `
 
 4. **After a Task**: Record decision outcomes
-   ` + "`" + `ami decision outcome <id> --outcome 0.9 --feedback "Worked perfectly"` + "`" + `
+   ` + "`" + `chaos decision outcome <id> --outcome 0.9 --feedback "Worked perfectly"` + "`" + `
 
 5. **After a Task**: Clean up and promote
-   ` + "`" + `ami promote <memory-id>` + "`" + ` (if it's a permanent team truth)
+   ` + "`" + `chaos promote <memory-id>` + "`" + ` (if it's a permanent team truth)
 
 6. **Periodic Maintenance**: Reflect on episodic noise
-   ` + "`" + `ami reflect --limit 10 --hours 24` + "`" + `
+   ` + "`" + `chaos reflect --limit 10 --hours 24` + "`" + `
 
 ## 📂 Memory Categories
 
