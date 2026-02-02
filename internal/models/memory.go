@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -11,10 +12,10 @@ import (
 type Category string
 
 const (
-	CategoryCore      Category = "core"
-	CategorySemantic   Category = "semantic"
-	CategoryWorking    Category = "working"
-	CategoryEpisodic   Category = "episodic"
+	CategoryCore     Category = "core"
+	CategorySemantic Category = "semantic"
+	CategoryWorking  Category = "working"
+	CategoryEpisodic Category = "episodic"
 )
 
 // IsValid checks if the category is valid
@@ -72,18 +73,69 @@ func (t Tags) Value() (driver.Value, error) {
 
 // Memory represents a stored memory
 type Memory struct {
-	ID              string     `json:"id"`
-	Content         string     `json:"content"`
-	OwnerID         string     `json:"owner_id"`
-	Category        Category   `json:"category"`
-	Priority        float64    `json:"priority"`
-	CreatedAt       time.Time  `json:"created_at"`
-	AccessedAt      time.Time  `json:"accessed_at"`
-	AccessCount     int        `json:"access_count"`
-	Source          string     `json:"source,omitempty"`
-	Tags            Tags       `json:"tags,omitempty"`
-	Embedding       []float32  `json:"embedding,omitempty"`
-	EmbeddingCached bool       `json:"embedding_cached"`
-	Status          Status     `json:"status,omitempty"`
-	TeamID          string     `json:"team_id,omitempty"`
+	ID              string    `json:"id"`
+	Content         string    `json:"content"`
+	OwnerID         string    `json:"owner_id"`
+	Category        Category  `json:"category"`
+	Priority        float64   `json:"priority"`
+	CreatedAt       time.Time `json:"created_at"`
+	AccessedAt      time.Time `json:"accessed_at"`
+	AccessCount     int       `json:"access_count"`
+	Source          string    `json:"source,omitempty"`
+	Tags            Tags      `json:"tags,omitempty"`
+	Embedding       []float32 `json:"embedding,omitempty"`
+	EmbeddingCached bool      `json:"embedding_cached"`
+	Status          Status    `json:"status,omitempty"`
+	TeamID          string    `json:"team_id,omitempty"`
+}
+
+// Helper functions for type conversion
+
+func AsString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func AsFloat64(v interface{}) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	default:
+		return 0.0
+	}
+}
+
+func AsInt(v interface{}) int {
+	switch val := v.(type) {
+	case int:
+		return val
+	case int64:
+		return int(val)
+	case float64:
+		return int(val)
+	default:
+		return 0
+	}
+}
+
+func AsTime(v interface{}) time.Time {
+	if v == nil {
+		return time.Time{}
+	}
+	s := AsString(v)
+	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
+		return t
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	return time.Time{}
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hargabyte/ami/internal/db"
+	"github.com/hargabyte/ami/internal/models"
 )
 
 // Decision represents a tracked decision and its outcome
@@ -187,21 +188,21 @@ func parseDecisionJSON(output string) (*Decision, error) {
 	row := result.Rows[0]
 
 	var memoryIDs []string
-	if memIDsStr := asString(row["memory_ids"]); memIDsStr != "" {
+	if memIDsStr := models.AsString(row["memory_ids"]); memIDsStr != "" {
 		json.Unmarshal([]byte(memIDsStr), &memoryIDs)
 	}
 
-	createdAt := asTime(row["created_at"])
+	createdAt := models.AsTime(row["created_at"])
 
 	decision := &Decision{
-		ID:           asString(row["id"]),
-		TaskID:       asString(row["task_id"]),
+		ID:           models.AsString(row["id"]),
+		TaskID:       models.AsString(row["task_id"]),
 		MemoryIDs:    memoryIDs,
-		DecisionText: asString(row["decision_text"]),
-		Feedback:     asString(row["feedback"]),
-		CommitHash:   asString(row["commit_hash"]),
+		DecisionText: models.AsString(row["decision_text"]),
+		Feedback:     models.AsString(row["feedback"]),
+		CommitHash:   models.AsString(row["commit_hash"]),
 		CreatedAt:    createdAt,
-		Outcome:      asFloat64(row["outcome"]),
+		Outcome:      models.AsFloat64(row["outcome"]),
 	}
 
 	return decision, nil
@@ -219,19 +220,19 @@ func parseDecisionsJSON(output string) ([]Decision, error) {
 	decisions := make([]Decision, 0, len(result.Rows))
 	for _, row := range result.Rows {
 		var memoryIDs []string
-		if memIDsStr := asString(row["memory_ids"]); memIDsStr != "" {
+		if memIDsStr := models.AsString(row["memory_ids"]); memIDsStr != "" {
 			json.Unmarshal([]byte(memIDsStr), &memoryIDs)
 		}
 
 		decision := Decision{
-			ID:           asString(row["id"]),
-			TaskID:       asString(row["task_id"]),
+			ID:           models.AsString(row["id"]),
+			TaskID:       models.AsString(row["task_id"]),
 			MemoryIDs:    memoryIDs,
-			DecisionText: asString(row["decision_text"]),
-			Feedback:     asString(row["feedback"]),
-			CommitHash:   asString(row["commit_hash"]),
-			CreatedAt:    asTime(row["created_at"]),
-			Outcome:      asFloat64(row["outcome"]),
+			DecisionText: models.AsString(row["decision_text"]),
+			Feedback:     models.AsString(row["feedback"]),
+			CommitHash:   models.AsString(row["commit_hash"]),
+			CreatedAt:    models.AsTime(row["created_at"]),
+			Outcome:      models.AsFloat64(row["outcome"]),
 		}
 
 		decisions = append(decisions, decision)

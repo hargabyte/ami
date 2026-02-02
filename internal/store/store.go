@@ -170,7 +170,7 @@ func CatchupMemories(opts CatchupOptions) ([]models.Memory, error) {
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags, status
+		SELECT id, content, category, priority, created_at, accessed_at, access_count, source, tags
 		FROM memories
 		%s
 		ORDER BY created_at DESC
@@ -189,7 +189,6 @@ func CatchupMemories(opts CatchupOptions) ([]models.Memory, error) {
 func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 	// 1. Build WHERE clause
 	whereClauses := []string{}
-	// ... (rest of where clause building)
 
 	// Text search
 	if opts.Query != "" {
@@ -234,7 +233,7 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 	if opts.Semantic {
 		// Fetch all memories with embeddings for in-memory ranking
 		searchQuery = fmt.Sprintf(`
-			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, embedding, embedding_cached, status
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, embedding, embedding_cached, status, team_id
 			FROM memories
 			%s
 		`, whereClause)
@@ -242,13 +241,13 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 		// Use logarithmic decay scoring:
 		// Score = (Priority * (AccessCount + 1)) / (log10(TimeDelta + 10) * CategoryDecay)
 		searchQuery = fmt.Sprintf(`
-			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status,
-			(priority * (access_count + 1)) / (LOG10(TIMESTAMPDIFF(SECOND, accessed_at, NOW()) + 10) *
-			CASE
-				WHEN category = 'core' THEN 0.5
-				WHEN category = 'semantic' THEN 1.0
-				WHEN category = 'episodic' THEN 2.0
-				ELSE 1.5
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status, team_id,
+			(priority * (access_count + 1)) / (LOG10(TIMESTAMPDIFF(SECOND, accessed_at, NOW()) + 10) * 
+			CASE 
+				WHEN category = 'core' THEN 0.5 
+				WHEN category = 'semantic' THEN 1.0 
+				WHEN category = 'episodic' THEN 2.0 
+				ELSE 1.5 
 			END) as recall_score
 			FROM memories
 			%s
@@ -257,7 +256,7 @@ func RecallMemories(opts RecallOptions) ([]models.Memory, error) {
 		`, whereClause, opts.Limit)
 	} else {
 		searchQuery = fmt.Sprintf(`
-			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status
+			SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status, team_id
 			FROM memories
 			%s
 			ORDER BY priority DESC, accessed_at DESC
@@ -344,19 +343,19 @@ func GetMemoryHistory(id string) ([]MemoryHistory, error) {
 	var history []MemoryHistory
 	for _, row := range result.Rows {
 		var h MemoryHistory
-		h.ID = asString(row["id"])
-		h.Content = asString(row["content"])
-		h.Category = models.Category(asString(row["category"]))
-		h.Priority = asFloat64(row["priority"])
-		h.CreatedAt = asTime(row["created_at"])
-		h.AccessedAt = asTime(row["accessed_at"])
-		h.AccessCount = asInt(row["access_count"])
-		h.Source = asString(row["source"])
-		h.CommitHash = asString(row["commit_hash"])
-		h.Committer = asString(row["committer"])
-		h.CommitDate = asTime(row["commit_date"])
+		h.ID = models.AsString(row["id"])
+		h.Content = models.AsString(row["content"])
+		h.Category = models.Category(models.AsString(row["category"]))
+		h.Priority = models.AsFloat64(row["priority"])
+		h.CreatedAt = models.AsTime(row["created_at"])
+		h.AccessedAt = models.AsTime(row["accessed_at"])
+		h.AccessCount = models.AsInt(row["access_count"])
+		h.Source = models.AsString(row["source"])
+		h.CommitHash = models.AsString(row["commit_hash"])
+		h.Committer = models.AsString(row["committer"])
+		h.CommitDate = models.AsTime(row["commit_date"])
 
-		tagsJSON := asString(row["tags"])
+		tagsJSON := models.AsString(row["tags"])
 		var tags models.Tags
 		if tagsJSON != "" && tagsJSON != "[]" {
 			json.Unmarshal([]byte(tagsJSON), &tags)
@@ -408,9 +407,9 @@ func GetMemoryLinks(id string) ([]map[string]string, error) {
 	var links []map[string]string
 	for _, row := range result.Rows {
 		links = append(links, map[string]string{
-			"from_id":  asString(row["from_id"]),
-			"to_id":    asString(row["to_id"]),
-			"relation": asString(row["relation"]),
+			"from_id":  models.AsString(row["from_id"]),
+			"to_id":    models.AsString(row["to_id"]),
+			"relation": models.AsString(row["relation"]),
 		})
 	}
 
@@ -520,20 +519,17 @@ func PromoteMemory(id string, globalStorePath string) error {
 	}
 
 	row := result.Rows[0]
-	content := asString(row["content"])
-	owner := asString(row["owner_id"])
-	category := asString(row["category"])
-	priority := asFloat64(row["priority"])
-	source := asString(row["source"])
-	tagsJSON := asString(row["tags"])
+	content := models.AsString(row["content"])
+	owner := models.AsString(row["owner_id"])
+	category := models.AsString(row["category"])
+	priority := models.AsFloat64(row["priority"])
+	source := models.AsString(row["source"])
+	tagsJSON := models.AsString(row["tags"])
 
 	// Handle tags correctly
 	var tags []string
 	if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
-		// If it's not a JSON array string, it might be a raw string from tabular output
-		// But ExecDoltSQLJSON should return JSON. 
-		// Actually, dolt_history sometimes returns comma-separated strings or JSON.
-		// Let's just try to ensure it's valid JSON for the insert.
+		// Tag parsing handling
 	}
 	tagsBytes, _ := json.Marshal(tags)
 	finalTags := string(tagsBytes)
@@ -702,11 +698,11 @@ func RollbackMemory(id string, commitHash string) error {
 	}
 
 	row := result.Rows[0]
-	content := asString(row["content"])
-	category := asString(row["category"])
-	priority := asFloat64(row["priority"])
-	source := asString(row["source"])
-	tagsJSON := asString(row["tags"])
+	content := models.AsString(row["content"])
+	category := models.AsString(row["category"])
+	priority := models.AsFloat64(row["priority"])
+	source := models.AsString(row["source"])
+	tagsJSON := models.AsString(row["tags"])
 
 	// 2. Update the current memories table
 	updateQuery := fmt.Sprintf(`
@@ -743,10 +739,6 @@ func DeleteMemory(id string) error {
 
 // ListTags returns all unique tags in the database
 func ListTags() ([]string, error) {
-	// Use JSON_OVERLAPS or similar if supported, but simple way is to select all and unique in Go
-	// Better: SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(tags, '$[*]')) FROM memories
-	// Dolt supports JSON functions. Let's try to flatten.
-	// Actually, easier to fetch all tags and unique them in Go for now.
 	query := "SELECT tags FROM memories WHERE tags IS NOT NULL AND tags != '[]'"
 	output, err := ExecDoltSQLJSON(query)
 	if err != nil {
@@ -813,8 +805,8 @@ func GetMemoryStats() (map[string]interface{}, error) {
 	distribution := make(map[string]int)
 	total := 0
 	for _, row := range distResult.Rows {
-		cat := asString(row["category"])
-		count := asInt(row["count"])
+		cat := models.AsString(row["category"])
+		count := models.AsInt(row["count"])
 		distribution[cat] = count
 		total += count
 	}
@@ -852,9 +844,9 @@ func GetMemoryStats() (map[string]interface{}, error) {
 	avgDecay := 0.0
 	if len(metricsResult.Rows) > 0 {
 		row := metricsResult.Rows[0]
-		avgPriority = asFloat64(row["avg_priority"])
-		avgAccess = asFloat64(row["avg_access"])
-		avgDecay = asFloat64(row["avg_decay_score"])
+		avgPriority = models.AsFloat64(row["avg_priority"])
+		avgAccess = models.AsFloat64(row["avg_access"])
+		avgDecay = models.AsFloat64(row["avg_decay_score"])
 	}
 
 	return map[string]interface{}{
@@ -889,7 +881,7 @@ func GetMemoryCount() (int, error) {
 
 	// Get the count from the first column
 	for _, v := range result.Rows[0] {
-		return asInt(v), nil
+		return models.AsInt(v), nil
 	}
 
 	return 0, nil
@@ -909,29 +901,29 @@ func parseMemoriesJSON(output string) ([]models.Memory, error) {
 		var m models.Memory
 
 		// Parse row values by column name
-		m.ID = asString(row["id"])
-		m.Content = asString(row["content"])
-		m.OwnerID = asString(row["owner_id"])
-		m.Category = models.Category(asString(row["category"]))
-		m.Priority = asFloat64(row["priority"])
-		m.CreatedAt = asTime(row["created_at"])
-		m.AccessedAt = asTime(row["accessed_at"])
-		m.AccessCount = asInt(row["access_count"])
-		m.Source = asString(row["source"])
-		m.EmbeddingCached = asInt(row["embedding_cached"]) == 1
-		m.Status = models.Status(asString(row["status"]))
-		m.TeamID = asString(row["team_id"])
+		m.ID = models.AsString(row["id"])
+		m.Content = models.AsString(row["content"])
+		m.OwnerID = models.AsString(row["owner_id"])
+		m.Category = models.Category(models.AsString(row["category"]))
+		m.Priority = models.AsFloat64(row["priority"])
+		m.CreatedAt = models.AsTime(row["created_at"])
+		m.AccessedAt = models.AsTime(row["accessed_at"])
+		m.AccessCount = models.AsInt(row["access_count"])
+		m.Source = models.AsString(row["source"])
+		m.EmbeddingCached = models.AsInt(row["embedding_cached"]) == 1
+		m.Status = models.Status(models.AsString(row["status"]))
+		m.TeamID = models.AsString(row["team_id"])
 
 		// Parse embedding if present
 		if row["embedding"] != nil {
-			embeddingStr := asString(row["embedding"])
+			embeddingStr := models.AsString(row["embedding"])
 			if data, err := base64.StdEncoding.DecodeString(embeddingStr); err == nil {
 				m.Embedding = BinaryToFloat32(data)
 			}
 		}
 
 		// Parse tags JSON
-		tagsJSON := asString(row["tags"])
+		tagsJSON := models.AsString(row["tags"])
 		var tags models.Tags
 		if tagsJSON != "" && tagsJSON != "[]" {
 			json.Unmarshal([]byte(tagsJSON), &tags)
@@ -942,57 +934,6 @@ func parseMemoriesJSON(output string) ([]models.Memory, error) {
 	}
 
 	return memories, nil
-}
-
-// Helper functions for type conversion
-
-func asString(v interface{}) string {
-	if v == nil {
-		return ""
-	}
-	return fmt.Sprintf("%v", v)
-}
-
-func asFloat64(v interface{}) float64 {
-	switch val := v.(type) {
-	case float64:
-		return val
-	case float32:
-		return float64(val)
-	case int:
-		return float64(val)
-	case int64:
-		return float64(val)
-	default:
-		return 0.0
-	}
-}
-
-func asInt(v interface{}) int {
-	switch val := v.(type) {
-	case int:
-		return val
-	case int64:
-		return int(val)
-	case float64:
-		return int(val)
-	default:
-		return 0
-	}
-}
-
-func asTime(v interface{}) time.Time {
-	if v == nil {
-		return time.Time{}
-	}
-	s := asString(v)
-	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
-		return t
-	}
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t
-	}
-	return time.Time{}
 }
 
 // FindAutoPromotionCandidates finds memories eligible for promotion to global brain
@@ -1022,7 +963,7 @@ func FindAutoPromotionCandidates(minAccessCount int, minOutcome float64) ([]mode
 // GetMemoryByID retrieves a specific memory by ID
 func GetMemoryByID(id string) (*models.Memory, error) {
 	query := fmt.Sprintf(`
-		SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status
+		SELECT id, content, owner_id, category, priority, created_at, accessed_at, access_count, source, tags, status, team_id
 		FROM memories
 		WHERE id = '%s'
 	`, id)
