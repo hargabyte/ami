@@ -76,6 +76,28 @@ func GetRepoPath() (string, error) {
 	}
 }
 
+// GetHeadCommit returns the current HEAD commit hash
+func GetHeadCommit() (string, error) {
+	repoPath, err := GetRepoPath()
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command("dolt", "log", "-n", "1", "--oneline")
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("dolt log failed: %w\nOutput: %s", err, string(output))
+	}
+
+	parts := strings.Fields(string(output))
+	if len(parts) == 0 {
+		return "", fmt.Errorf("could not determine head commit")
+	}
+
+	return parts[0], nil
+}
+
 // DoltCommit creates a Dolt commit for the current database state
 func DoltCommit(message string) error {
 	repoPath, err := GetRepoPath()

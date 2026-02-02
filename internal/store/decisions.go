@@ -19,6 +19,7 @@ type Decision struct {
 	DecisionText string    `json:"decision_text"`
 	Outcome      float64   `json:"outcome"`
 	Feedback     string    `json:"feedback"`
+	CommitHash   string    `json:"commit_hash"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -37,11 +38,14 @@ func TrackDecision(taskID string, memoryIDs []string, decisionText string, sourc
 	// Escape single quotes
 	escapedDecisionText := strings.ReplaceAll(decisionText, "'", "''")
 
+	// Get current commit hash for temporal linking
+	commitHash, _ := db.GetHeadCommit()
+
 	// Insert decision
 	query := fmt.Sprintf(`
-		INSERT INTO decisions (id, task_id, memory_ids, decision_text, created_at)
-		VALUES ('%s', '%s', '%s', '%s', '%s')
-	`, id, taskID, string(memoryIDsJSON), escapedDecisionText, now)
+		INSERT INTO decisions (id, task_id, memory_ids, decision_text, created_at, commit_hash)
+		VALUES ('%s', '%s', '%s', '%s', '%s', '%s')
+	`, id, taskID, string(memoryIDsJSON), escapedDecisionText, now, commitHash)
 
 	_, err = db.ExecDoltSQL(query)
 	if err != nil {
@@ -66,6 +70,7 @@ func TrackDecision(taskID string, memoryIDs []string, decisionText string, sourc
 		MemoryIDs:    memoryIDs,
 		DecisionText: decisionText,
 		Outcome:      0.0,
+		CommitHash:   commitHash,
 		CreatedAt:    createdTime,
 	}, nil
 }
@@ -127,7 +132,7 @@ func RecordOutcome(decisionID string, outcome float64, feedback string) error {
 // GetDecision retrieves a decision by ID
 func GetDecision(decisionID string) (*Decision, error) {
 	query := fmt.Sprintf(`
-		SELECT id, task_id, memory_ids, decision_text, outcome, feedback, created_at
+		SELECT id, task_id, memory_ids, decision_text, outcome, feedback, created_at, commit_hash
 		FROM decisions
 		WHERE id = '%s'
 	`, decisionID)
@@ -145,14 +150,14 @@ func ListDecisions(taskID string) ([]Decision, error) {
 	var query string
 	if taskID != "" {
 		query = fmt.Sprintf(`
-			SELECT id, task_id, memory_ids, decision_text, outcome, feedback, created_at
+			SELECT id, task_id, memory_ids, decision_text, outcome, feedback, created_at, commit_hash
 			FROM decisions
 			WHERE task_id = '%s'
 			ORDER BY created_at DESC
 		`, taskID)
 	} else {
 		query = `
-			SELECT id, task_id, memory_ids, decision_text, outcome, feedback, created_at
+			SELECT id, task_id, memory_ids, decision_text, outcome, feedback, created_at, commit_hash
 			FROM decisions
 			ORDER BY created_at DESC
 		`
@@ -194,6 +199,7 @@ func parseDecisionJSON(output string) (*Decision, error) {
 		MemoryIDs:    memoryIDs,
 		DecisionText: asString(row["decision_text"]),
 		Feedback:     asString(row["feedback"]),
+		CommitHash:   asString(row["commit_hash"]),
 		CreatedAt:    createdAt,
 		Outcome:      asFloat64(row["outcome"]),
 	}
@@ -223,6 +229,7 @@ func parseDecisionsJSON(output string) ([]Decision, error) {
 			MemoryIDs:    memoryIDs,
 			DecisionText: asString(row["decision_text"]),
 			Feedback:     asString(row["feedback"]),
+			CommitHash:   asString(row["commit_hash"]),
 			CreatedAt:    asTime(row["created_at"]),
 			Outcome:      asFloat64(row["outcome"]),
 		}

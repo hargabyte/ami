@@ -1235,6 +1235,7 @@ Examples:
 			} else {
 				fmt.Printf("✓ Decision tracked: %s\n", decision.ID)
 				fmt.Printf("  Task: %s\n", decision.TaskID)
+				fmt.Printf("  Commit: %s\n", decision.CommitHash)
 				fmt.Printf("  Text: %s\n", decision.DecisionText)
 				if len(decision.MemoryIDs) > 0 {
 					fmt.Printf("  Linked memories: %d\n", len(decision.MemoryIDs))
@@ -1364,6 +1365,7 @@ Examples:
 
 					fmt.Printf("\n%s\n", d.ID)
 					fmt.Printf("  Task: %s\n", d.TaskID)
+					fmt.Printf("  Commit: %s\n", d.CommitHash)
 					fmt.Printf("  Decision: %s\n", d.DecisionText)
 					fmt.Printf("  Outcome: %s\n", outcomeStr)
 					if d.Feedback != "" {
